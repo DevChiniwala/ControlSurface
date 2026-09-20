@@ -107,10 +107,33 @@ def test_failure_to_reproducible_release_decision(tmp_path: Path) -> None:
     )
     project_id = created["project_id"]
     project_url = f"{base}/api/projects/{project_id}"
+    with pytest.raises(urllib.error.HTTPError) as missing_csrf:
+        _request(
+            f"{project_url}/keys",
+            method="POST",
+            body={"label": "rejected without CSRF"},
+            opener=owner,
+        )
+    assert missing_csrf.value.code == 403
+    csrf = _request(f"{base}/api/session/csrf", opener=owner)["token"]
+    owner_headers = {"X-CSRF-Token": csrf}
+    with pytest.raises(urllib.error.HTTPError) as rejected_logout:
+        _request(f"{base}/api/logout", method="POST", opener=owner)
+    assert rejected_logout.value.code == 403
+    with pytest.raises(urllib.error.HTTPError) as invalid_csrf:
+        _request(
+            f"{project_url}/keys",
+            method="POST",
+            body={"label": "rejected with wrong CSRF"},
+            headers={"X-CSRF-Token": "wrong"},
+            opener=owner,
+        )
+    assert invalid_csrf.value.code == 403
     key = _request(
         f"{project_url}/keys",
         method="POST",
         body={"label": "hero test"},
+        headers=owner_headers,
         opener=owner,
     )["key"]
     auth = {"Authorization": f"Bearer {key}"}
@@ -120,12 +143,14 @@ def test_failure_to_reproducible_release_decision(tmp_path: Path) -> None:
         f"{base}/api/projects",
         method="POST",
         body={"name": "Isolated", "slug": "isolated-ci"},
+        headers=owner_headers,
         opener=owner,
     )["id"]
     other_key = _request(
         f"{base}/api/projects/{other}/keys",
         method="POST",
         body={"label": "other project"},
+        headers=owner_headers,
         opener=owner,
     )["key"]
     with pytest.raises(urllib.error.HTTPError) as rejected:
@@ -141,6 +166,7 @@ def test_failure_to_reproducible_release_decision(tmp_path: Path) -> None:
         method="POST",
         body={"name": "Refund scenarios"},
         headers=auth,
+        opener=owner,
     )["id"]
     for case in suite["cases"]:
         _request(

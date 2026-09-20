@@ -20,6 +20,7 @@ from .auth import (
     create_api_key,
     create_browser_session,
     create_owner,
+    csrf_token,
     project_for_api_key,
     verify_password,
 )
@@ -34,7 +35,7 @@ app.add_middleware(
     allow_origins=os.getenv("CS_CORS_ORIGINS", "http://localhost:3000").split(","),
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Content-Type", "Authorization", "X-Bootstrap-Token"],
+    allow_headers=["Content-Type", "Authorization", "X-Bootstrap-Token", "X-CSRF-Token"],
 )
 
 
@@ -92,13 +93,18 @@ def _actor(request: Request, settings: Settings = Depends(_settings)) -> tuple[s
     token = request.cookies.get("cs_session")
     authorization = request.headers.get("authorization", "")
     with postgres(settings) as connection:
-        user_id = browser_user(connection, token)
-        if user_id:
-            return "user", user_id
         if authorization.lower().startswith("bearer "):
             project_id = project_for_api_key(connection, authorization[7:].strip())
             if project_id:
                 return "key", project_id
+            raise HTTPException(401, "Authentication required")
+        user_id = browser_user(connection, token)
+        if user_id and token:
+            if request.method not in {"GET", "HEAD", "OPTIONS"}:
+                provided = request.headers.get("x-csrf-token", "")
+                if not provided or not hmac.compare_digest(provided, csrf_token(token)):
+                    raise HTTPException(403, "Invalid CSRF token")
+            return "user", user_id
     raise HTTPException(401, "Authentication required")
 
 
@@ -205,8 +211,13 @@ def login(
 
 @app.post("/api/logout")
 def logout(
-    request: Request, response: Response, settings: Settings = Depends(_settings)
+    request: Request,
+    response: Response,
+    actor: tuple[str, str] = Depends(_actor),
+    settings: Settings = Depends(_settings),
 ) -> dict[str, str]:
+    if actor[0] != "user":
+        raise HTTPException(403, "Owner session required")
     token = request.cookies.get("cs_session")
     if token:
         import hashlib
@@ -218,6 +229,18 @@ def logout(
             )
     response.delete_cookie("cs_session")
     return {"status": "ok"}
+
+
+@app.get("/api/session/csrf")
+def session_csrf(
+    request: Request,
+    response: Response,
+    actor: tuple[str, str] = Depends(_actor),
+) -> dict[str, str]:
+    if actor[0] != "user":
+        raise HTTPException(403, "Owner session required")
+    response.headers["Cache-Control"] = "no-store"
+    return {"token": csrf_token(request.cookies["cs_session"])}
 
 
 @app.get("/api/projects")

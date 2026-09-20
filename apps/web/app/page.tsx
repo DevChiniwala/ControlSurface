@@ -161,13 +161,45 @@ const navigation: {
   },
 ];
 
+let csrfPromise: Promise<string> | null = null;
+
+function browserCsrfToken(): Promise<string> {
+  if (!csrfPromise) {
+    csrfPromise = fetch(`${API}/api/session/csrf`, {
+      credentials: "include",
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Browser session expired");
+        const data = (await response.json()) as { token: string };
+        return data.token;
+      })
+      .catch((error: unknown) => {
+        csrfPromise = null;
+        throw error;
+      });
+  }
+  return csrfPromise;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method || "GET").toUpperCase();
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", "application/json");
+  if (
+    !["GET", "HEAD", "OPTIONS"].includes(method) &&
+    path !== "/api/login" &&
+    path !== "/api/setup"
+  ) {
+    headers.set("X-CSRF-Token", await browserCsrfToken());
+  }
   const response = await fetch(`${API}${path}`, {
     ...init,
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+    headers,
   });
   if (!response.ok) {
+    if (response.status === 403) csrfPromise = null;
     let message = `Request failed (${response.status})`;
     try {
       const body = await response.json();
@@ -176,6 +208,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       /* no JSON body */
     }
     throw new Error(message);
+  }
+  if (["/api/login", "/api/setup", "/api/logout"].includes(path)) {
+    csrfPromise = null;
   }
   return response.json() as Promise<T>;
 }

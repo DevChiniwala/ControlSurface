@@ -56,8 +56,8 @@ The gate validates paired case IDs, rejects duplicates, applies versioned thresh
 
 ## Test results
 
-- Python unit/SDK suite: **22 passed**, with the opt-in end-to-end test skipped in the ordinary run; one Python 3.16 deprecation warning from a dependency.
-- Disposable Docker full-stack hero test: **1 passed in 94.85 seconds** on the latest run. It exercised project isolation, dataset API, OTLP ingest, captured model/tool context, Health, graph/cluster/incident/change evidence, regression suite export, paired evaluations, BLOCK/PASS gates, manifest hashes, and evidence verification.
+- Python unit/SDK suite: **23 passed**, with the opt-in end-to-end test skipped in the ordinary run; one Python 3.16 deprecation warning from a dependency.
+- Disposable Docker full-stack hero test: **1 passed in 104.10 seconds** on the latest run. It exercised owner-session CSRF rejection, project-key precedence, project isolation, dataset API, OTLP ingest, captured model/tool context, Health, graph/cluster/incident/change evidence, regression suite export, paired evaluations, BLOCK/PASS gates, manifest hashes, and evidence verification.
 - Ruff lint/format, full backend/SDK mypy (20 source files), web TypeScript typecheck, Prettier check, and Next.js production build pass locally.
 - GitHub Actions defines quality and disposable full-stack jobs, but it has not yet run on the eventual public repository. Full authenticated browser E2E and accessibility tests are not present.
 
@@ -67,7 +67,7 @@ A single local run of `benchmarks/inbox.py` used 200 synthetic compressed batche
 
 ## Security, provenance, and license status
 
-Current controls include Argon2 owner-password hashes, hashed project keys, project-scoped APIs, bound SQL parameters, ingress limits, redaction foundations, loopback-bound Compose ports, HttpOnly/SameSite browser sessions, and configured CORS. Limitations include no explicit CSRF token or request rate limit, incomplete remote-deployment hardening and retention controls, potentially sensitive telemetry, and trusted local evaluator execution. See [SECURITY.md](SECURITY.md).
+Current controls include Argon2 owner-password hashes, hashed project keys, project-scoped APIs, bound SQL parameters, ingress limits, redaction foundations, loopback-bound Compose ports, HttpOnly/SameSite browser sessions with session-bound CSRF tokens for mutations, and configured CORS. Limitations include no request rate limit, incomplete remote-deployment hardening and retention controls, potentially sensitive telemetry, and trusted local evaluator execution. See [SECURITY.md](SECURITY.md).
 
 The private research archives, audits, and provenance ledger are outside this repository. No source was copied or adapted from them. The project declares Apache-2.0 for original code. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) records important runtime licenses, including LGPL components in database and image-processing dependencies. An artifact-specific transitive/container license and notice review is still required before publishing binary images. No secret, prohibited-reference-brand, or dependency-audit claim is final until repeated on the exact commit proposed for release.
 
@@ -88,7 +88,7 @@ Follow [README.md](README.md): set independent `.env` secrets, run `docker compo
 1. Automate authenticated browser paths for Health → incident → representative run → regression → evidence.
 2. Verify dataset item creation and release-evidence detail in the browser at desktop and narrow widths.
 3. Add keyboard/focus and accessibility tests across overlays, forms, trace tree, and navigation.
-4. Add explicit CSRF protection and request rate limiting before any remote deployment.
+4. Add request rate limiting and complete the remote-deployment security review.
 5. Threat-model telemetry capture, redaction, and secrets embedded in free text or URLs.
 6. Publish operator backup, restore, and retention procedures; test restore from real volumes.
 7. Complete transitive Python/npm and base-image license/NOTICE review for each binary artifact.

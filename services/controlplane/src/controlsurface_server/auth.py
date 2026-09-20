@@ -19,6 +19,13 @@ def _digest(value: str) -> bytes:
     return hashlib.sha256(value.encode("utf-8")).digest()
 
 
+def csrf_token(session_token: str) -> str:
+    """Bind a browser mutation token to its unguessable HttpOnly session secret."""
+    return hmac.new(
+        session_token.encode("utf-8"), b"controlsurface-csrf-v1", hashlib.sha256
+    ).hexdigest()
+
+
 def create_owner(
     connection: DbConnection, email: str, password: str, project_name: str
 ) -> tuple[str, str]:
