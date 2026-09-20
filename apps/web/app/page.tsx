@@ -8,6 +8,8 @@ import {
   type DatasetRecord,
   type EvidenceBundle,
 } from "./inspector-panels";
+import { SpanInspector, type InspectedSpan } from "./span-inspector";
+import { usePanelFocus } from "./use-panel-focus";
 import {
   Activity,
   AlertTriangle,
@@ -49,19 +51,8 @@ type Trace = {
   status: string;
   session_id: string;
 };
-type Span = {
-  span_id: string;
+type Span = InspectedSpan & {
   parent_span_id: string;
-  name: string;
-  operation: string;
-  status: string;
-  start_ns: number;
-  end_ns: number;
-  attributes: RecordValue;
-  events: RecordValue[];
-  input_tokens: number;
-  output_tokens: number;
-  cost_nano_usd: number;
 };
 type TraceDetail = {
   trace_id: string;
@@ -375,9 +366,7 @@ function SpanTree({
   onCreateRegression: (trace: TraceDetail) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-  const [tab, setTab] = useState<"overview" | "attributes" | "events">(
-    "overview",
-  );
+  const { closeRef, panelRef } = usePanelFocus(onClose);
   const byParent = useMemo(() => {
     const map = new Map<string, Span[]>();
     detail.spans.forEach((span) =>
@@ -386,19 +375,24 @@ function SpanTree({
         span,
       ]),
     );
+    for (const children of map.values()) {
+      children.sort((left, right) => left.start_ns - right.start_ns);
+    }
     return map;
-  }, [detail]);
+  }, [detail.spans]);
   const current =
     detail.spans.find((span) => span.span_id === selected) || detail.spans[0];
+  const visited = new Set<string>();
   function renderSpan(span: Span, depth: number): React.ReactNode {
+    if (visited.has(span.span_id)) return null;
+    visited.add(span.span_id);
     return (
       <div key={span.span_id}>
         <button
           className={`span-row ${current?.span_id === span.span_id ? "selected" : ""}`}
-          style={{ paddingLeft: 14 + depth * 20 }}
+          style={{ paddingLeft: 14 + Math.min(depth, 20) * 20 }}
           onClick={() => {
             setSelected(span.span_id);
-            setTab("overview");
           }}
         >
           <span
@@ -416,16 +410,28 @@ function SpanTree({
       </div>
     );
   }
+  const spanIds = new Set(detail.spans.map((span) => span.span_id));
   const roots = detail.spans.filter(
-    (span) =>
-      !span.parent_span_id ||
-      !detail.spans.some((parent) => parent.span_id === span.parent_span_id),
+    (span) => !span.parent_span_id || !spanIds.has(span.parent_span_id),
   );
+  roots.sort((left, right) => left.start_ns - right.start_ns);
+  const rootRows = roots.map((span) => renderSpan(span, 0));
+  const unlinkedRows = detail.spans
+    .filter((span) => !visited.has(span.span_id))
+    .sort((left, right) => left.start_ns - right.start_ns)
+    .map((span) => renderSpan(span, 0));
   return (
     <div className="detail-overlay">
-      <div className="detail-panel">
+      <section
+        className="detail-panel"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="trace-title"
+      >
         <div className="detail-top">
           <button
+            ref={closeRef}
             className="icon-button"
             onClick={onClose}
             aria-label="Close trace"
@@ -441,7 +447,9 @@ function SpanTree({
           </button>
         </div>
         <div className="detail-intro">
-          <h2>{roots[0]?.name || "Agent run"}</h2>
+          <h2 id="trace-title">
+            {roots[0]?.name || detail.spans[0]?.name || "Agent run"}
+          </h2>
           <div className="detail-meta">
             <Badge
               value={
@@ -459,79 +467,20 @@ function SpanTree({
         <div className="trace-layout">
           <div className="trace-tree">
             <div className="pane-label">EXECUTION</div>
-            {roots.map((span) => renderSpan(span, 0))}
+            {rootRows}
+            {unlinkedRows.length > 0 && (
+              <div className="pane-label unlinked-label">
+                UNLINKED OR CYCLIC SPANS
+              </div>
+            )}
+            {unlinkedRows}
           </div>
           <div className="span-detail">
             <div className="pane-label">SPAN DETAIL</div>
-            {current && (
-              <>
-                <div className="span-detail-heading">
-                  <Badge value={current.operation} />
-                  <h3>{current.name}</h3>
-                  <span className="mono muted">{current.span_id}</span>
-                </div>
-                <div className="tabs">
-                  <button
-                    className={tab === "overview" ? "active" : ""}
-                    onClick={() => setTab("overview")}
-                  >
-                    Overview
-                  </button>
-                  <button
-                    className={tab === "attributes" ? "active" : ""}
-                    onClick={() => setTab("attributes")}
-                  >
-                    Attributes
-                  </button>
-                  <button
-                    className={tab === "events" ? "active" : ""}
-                    onClick={() => setTab("events")}
-                  >
-                    Events
-                  </button>
-                </div>
-                {tab === "overview" ? (
-                  <div className="data-list">
-                    <div>
-                      <span>Status</span>
-                      <Badge value={current.status} />
-                    </div>
-                    <div>
-                      <span>Latency</span>
-                      <strong>
-                        {((current.end_ns - current.start_ns) / 1e6).toFixed(1)}{" "}
-                        ms
-                      </strong>
-                    </div>
-                    <div>
-                      <span>Input tokens</span>
-                      <strong>{current.input_tokens.toLocaleString()}</strong>
-                    </div>
-                    <div>
-                      <span>Output tokens</span>
-                      <strong>{current.output_tokens.toLocaleString()}</strong>
-                    </div>
-                    <div>
-                      <span>Cost</span>
-                      <strong>{usd(current.cost_nano_usd)}</strong>
-                    </div>
-                  </div>
-                ) : (
-                  <pre className="json-block">
-                    {JSON.stringify(
-                      tab === "attributes"
-                        ? current.attributes
-                        : current.events,
-                      null,
-                      2,
-                    )}
-                  </pre>
-                )}
-              </>
-            )}
+            {current && <SpanInspector key={current.span_id} span={current} />}
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

@@ -4,7 +4,7 @@ Status: **local pre-release candidate, not public-release sign-off** · 2026-09-
 
 ## Project status
 
-The deterministic closed loop passed on a fresh disposable Docker stack: Python SDK → authenticated OTLP → durable inbox → ClickHouse traces and agent-run graph → Production Health → breaking payment-tool schema → failure cluster → incident with ranked change evidence → reviewed production-derived regression → broken candidate BLOCK → fixed candidate PASS → content-hashed release evidence. The clean-stack end-to-end test completed in 96.01 seconds. The test-only stack and its volumes were removed afterward; the development stack was retained.
+The deterministic closed loop passed on a fresh disposable Docker stack: Python SDK → authenticated OTLP → durable inbox → ClickHouse traces and agent-run graph → Production Health → breaking payment-tool schema → failure cluster → incident with ranked change evidence → reviewed production-derived regression → broken candidate BLOCK → fixed candidate PASS → content-hashed release evidence. The latest clean-stack end-to-end test completed in 94.85 seconds and also verified captured model output and payment-tool arguments in the stored trace. The test-only stack and its volumes were removed afterward; the development volumes were retained.
 
 This proves a representative local path, not production readiness. Browser interaction, large-scale performance, remote deployment security, and binary redistribution reviews remain open.
 
@@ -24,7 +24,7 @@ ControlSurface is an original modular Python control plane, separate OTLP receiv
 
 ## UI foundation, adapted components, and original UI work
 
-The application and shell are independently authored. **No UI source, components, styles, assets, or text were adapted from private research material.** Production Health is the landing page; traces are supporting evidence. Functional surfaces include traces/sessions, clusters/incidents, Change Ledger, regression review, datasets and items, release-evidence inspection, SLO policies, and API keys. Trace detail shows the execution tree, attributes, events, token counts, cost, and error state. The dataset item and evidence-detail panels were added after the clean-stack test; their APIs, TypeScript checks, and production build pass, but their full browser interactions have not yet been automated. A browser screenshot exposed and led to a corrected auth-brand layout; the authenticated application has not had complete visual QA.
+The application and shell are independently authored. **No UI source, components, styles, assets, or text were adapted from private research material.** Production Health is the landing page; traces are supporting evidence. Functional surfaces include traces/sessions, clusters/incidents, Change Ledger, regression review, datasets and items, release-evidence inspection, SLO policies, and API keys. Trace detail shows the execution tree and contextual tabs for captured input/output, model settings, tokens/cost, tool arguments/results, retrieval, errors, events, and metadata. The dataset item and evidence-detail panels have passing APIs, TypeScript checks, and production build, but their full browser interactions have not yet been automated. A browser screenshot exposed and led to a corrected auth-brand layout; the authenticated application has not had complete visual QA.
 
 ## Backend and databases
 
@@ -57,7 +57,7 @@ The gate validates paired case IDs, rejects duplicates, applies versioned thresh
 ## Test results
 
 - Python unit/SDK suite: **22 passed**, with the opt-in end-to-end test skipped in the ordinary run; one Python 3.16 deprecation warning from a dependency.
-- Disposable Docker full-stack hero test: **1 passed in 96.01 seconds**. It exercised project isolation, dataset API, OTLP ingest, Health, graph/cluster/incident/change evidence, regression suite export, paired evaluations, BLOCK/PASS gates, manifest hashes, and evidence verification.
+- Disposable Docker full-stack hero test: **1 passed in 94.85 seconds** on the latest run. It exercised project isolation, dataset API, OTLP ingest, captured model/tool context, Health, graph/cluster/incident/change evidence, regression suite export, paired evaluations, BLOCK/PASS gates, manifest hashes, and evidence verification.
 - Ruff lint/format, full backend/SDK mypy (20 source files), web TypeScript typecheck, Prettier check, and Next.js production build pass locally.
 - GitHub Actions defines quality and disposable full-stack jobs, but it has not yet run on the eventual public repository. Full authenticated browser E2E and accessibility tests are not present.
 

@@ -712,6 +712,11 @@ td .muted {
   font-weight: 800;
   margin: 0 11px 15px;
 }
+.unlinked-label {
+  border-top: 1px solid var(--border);
+  padding-top: 17px;
+  margin-top: 16px;
+}
 .span-row {
   border: 0;
   background: transparent;
@@ -795,6 +800,14 @@ td .muted {
 .tabs button.active {
   border-bottom: 2px solid var(--accent);
   color: var(--text);
+}
+.contextual-tabs {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  white-space: nowrap;
+}
+.contextual-tabs button {
+  flex: none;
 }
 .data-list > div {
   display: flex;

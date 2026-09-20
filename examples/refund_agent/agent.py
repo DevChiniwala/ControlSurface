@@ -188,6 +188,10 @@ class RefundAgent:
                         model_span.set_attribute(
                             "gen_ai.usage.output_tokens", output_tokens
                         )
+                        model_span.set_attribute(
+                            "controlsurface.output",
+                            json.dumps(decision, sort_keys=True),
+                        )
                 steps += 1
                 if decision["action"] != "verify_and_refund":
                     return {
@@ -249,8 +253,18 @@ class RefundAgent:
                             self.tool.schema_version
                         ),
                     },
-                ):
+                ) as refund_span:
+                    if refund_span:
+                        refund_span.set_attribute(
+                            "controlsurface.tool.arguments",
+                            json.dumps(argument, sort_keys=True),
+                        )
                     refund = self.tool.refund(argument)
+                    if refund_span:
+                        refund_span.set_attribute(
+                            "controlsurface.tool.result",
+                            json.dumps(refund, sort_keys=True),
+                        )
                 tools.append("payments.refund")
                 steps += 1
                 return {

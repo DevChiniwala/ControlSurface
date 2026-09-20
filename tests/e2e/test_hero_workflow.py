@@ -194,6 +194,15 @@ def test_failure_to_reproducible_release_decision(tmp_path: Path) -> None:
     operations = {node["operation"] for node in detail["graph"]["nodes"]}
     assert {"agent", "model", "retrieval", "tool"}.issubset(operations)
     assert any(span["status"] == "error" for span in detail["spans"])
+    assert any(
+        span["operation"] == "model" and "controlsurface.output" in span["attributes"]
+        for span in detail["spans"]
+    )
+    assert any(
+        span["name"] == "payments.refund"
+        and "controlsurface.tool.arguments" in span["attributes"]
+        for span in detail["spans"]
+    )
 
     incidents = _request(f"{project_url}/incidents", headers=auth)
     incident = next(
