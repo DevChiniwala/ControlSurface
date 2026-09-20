@@ -12,6 +12,7 @@ python -m ruff format --check services/controlplane sdk/python examples/refund_a
 python -m mypy services/controlplane/src sdk/python/src --ignore-missing-imports
 cd apps/web
 npm ci
+npm run lint
 npm run format:check
 npm run typecheck
 npm run build

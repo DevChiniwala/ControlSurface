@@ -102,4 +102,18 @@ test("production health to incident evidence, run, dataset, and release decision
   await expect(
     page.getByRole("heading", { name: "Welcome back" }),
   ).toBeVisible();
+  await expect(page.getByText("Illustrative product preview")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByLabel("Illustrative production health preview"),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.getByLabel("Email").fill("ci-owner@example.invalid");
+  await page.getByLabel("Password").fill("disposable-ci-password-only");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Production Health" }),
+  ).toBeVisible();
 });

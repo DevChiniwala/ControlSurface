@@ -6,7 +6,9 @@ export function usePanelFocus(onClose: () => void) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const callback = useRef(onClose);
-  callback.current = onClose;
+  useEffect(() => {
+    callback.current = onClose;
+  }, [onClose]);
   useEffect(() => {
     const previous =
       document.activeElement instanceof HTMLElement

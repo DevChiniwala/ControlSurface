@@ -22,6 +22,7 @@ This inventory highlights direct runtime dependencies and licenses that matter t
 | [Lucide](https://github.com/lucide-icons/lucide) | Generic UI icons | ISC |
 | [TypeScript](https://github.com/microsoft/TypeScript) | Web type checking | Apache-2.0 |
 | [Prettier](https://github.com/prettier/prettier) | Development formatting | MIT |
+| [ESLint](https://github.com/eslint/eslint), [eslint-config-next](https://github.com/vercel/next.js), and [eslint-config-prettier](https://github.com/prettier/eslint-config-prettier) | Development linting | MIT |
 | [Playwright Test](https://github.com/microsoft/playwright) | Authenticated browser testing; installed in the current web image but not invoked at runtime | Apache-2.0; separately downloaded browser binaries carry their own terms |
 | [certifi](https://github.com/certifi/python-certifi) | Transitive CA bundle | MPL-2.0 |
 | [caniuse-lite](https://github.com/browserslist/caniuse-lite) | Transitive browser compatibility data | CC-BY-4.0 |

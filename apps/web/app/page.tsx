@@ -10,10 +10,11 @@ import {
 } from "./inspector-panels";
 import { SpanInspector, type InspectedSpan } from "./span-inspector";
 import { usePanelFocus } from "./use-panel-focus";
+import { AuthVisual, MobileHealthPreview } from "./auth-visual";
+import { BrandIdentity, BrandMark } from "./brand";
 import {
   Activity,
   AlertTriangle,
-  ArrowLeft,
   ArrowRight,
   Check,
   ChevronDown,
@@ -29,7 +30,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  ServerCog,
   ShieldAlert,
   SlidersHorizontal,
   Workflow,
@@ -123,6 +123,20 @@ type Page =
   | "changes"
   | "slos"
   | "keys";
+
+const pagePath: Record<Page, string> = {
+  health: "health",
+  traces: "traces",
+  sessions: "sessions",
+  clusters: "clusters",
+  incidents: "incidents",
+  regressions: "regressions",
+  datasets: "datasets",
+  release: "release-evidence",
+  changes: "changes",
+  slos: "slos",
+  keys: "keys",
+};
 
 const navigation: {
   label: string;
@@ -313,79 +327,83 @@ function Auth({
   }
   return (
     <div className="auth-wrap">
-      <div className="auth-card">
-        <div className="brand-mark">
-          C<span>∕</span>S
-        </div>
-        <span className="eyebrow">CONTROL SURFACE</span>
-        <h1>{configured ? "Welcome back" : "Set up your control plane"}</h1>
-        <p>
-          {configured
-            ? "Sign in to inspect your production agents."
-            : "Create the first owner and project. Your bootstrap token is in the local .env file."}
-        </p>
-        <form onSubmit={submit}>
-          <label>
-            Email
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              required
-              minLength={configured ? 1 : 12}
-              autoComplete={configured ? "current-password" : "new-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
-          {!configured && (
-            <>
+      <header className="auth-brand">
+        <BrandIdentity />
+      </header>
+      <div className="auth-stage">
+        <main className="auth-main">
+          <div className="auth-card">
+            <span className="auth-kicker">CONTROL SURFACE WORKSPACE</span>
+            <h1>{configured ? "Welcome back" : "Set up your control plane"}</h1>
+            <p>
+              {configured
+                ? "Sign in to your ControlSurface workspace."
+                : "Create the first owner and project. Your bootstrap token is in the local .env file."}
+            </p>
+            <form onSubmit={submit}>
               <label>
-                Project name
+                Email
                 <input
+                  type="email"
                   required
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@company.com"
                 />
               </label>
               <label>
-                Bootstrap token
+                Password
                 <input
-                  required
                   type="password"
-                  value={bootstrap}
-                  onChange={(e) => setBootstrap(e.target.value)}
+                  required
+                  minLength={configured ? 1 : 12}
+                  autoComplete={
+                    configured ? "current-password" : "new-password"
+                  }
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                 />
               </label>
-            </>
-          )}
-          {error && (
-            <div className="form-error" role="alert">
-              {error}
+              {!configured && (
+                <>
+                  <label>
+                    Project name
+                    <input
+                      required
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Bootstrap token
+                    <input
+                      required
+                      type="password"
+                      value={bootstrap}
+                      onChange={(e) => setBootstrap(e.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+              {error && (
+                <div className="form-error" role="alert">
+                  {error}
+                </div>
+              )}
+              <button className="button primary full" disabled={busy}>
+                {busy ? "Working…" : configured ? "Sign in" : "Create owner"}
+                <ArrowRight size={16} />
+              </button>
+            </form>
+            <div className="auth-card-footer">
+              <span className="auth-secure-dot" /> Self-hosted · Private by
+              default
             </div>
-          )}
-          <button className="button primary full" disabled={busy}>
-            {busy ? "Working…" : configured ? "Sign in" : "Create owner"}
-            <ArrowRight size={16} />
-          </button>
-        </form>
-      </div>
-      <div className="auth-aside">
-        <span>OBSERVE · EVALUATE · MONITOR · DIAGNOSE · SHIP</span>
-        <strong>From production behavior to release confidence.</strong>
-        <p>
-          Agent runs, incidents, regression cases and evidence-backed decisions
-          in one place.
-        </p>
+          </div>
+          <MobileHealthPreview />
+        </main>
+        <AuthVisual />
       </div>
     </div>
   );
@@ -569,26 +587,15 @@ export default function Home() {
     void refreshIdentity();
   }, [refreshIdentity]);
 
-  const path: Record<Page, string> = {
-    health: "health",
-    traces: "traces",
-    sessions: "sessions",
-    clusters: "clusters",
-    incidents: "incidents",
-    regressions: "regressions",
-    datasets: "datasets",
-    release: "release-evidence",
-    changes: "changes",
-    slos: "slos",
-    keys: "keys",
-  };
   const refresh = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
     setError("");
     setResource(null);
     try {
-      const value = await request(`/api/projects/${projectId}/${path[page]}`);
+      const value = await request(
+        `/api/projects/${projectId}/${pagePath[page]}`,
+      );
       setResource({ projectId, page, value });
     } catch (e) {
       setError((e as Error).message);
@@ -848,7 +855,7 @@ export default function Home() {
   if (configured === null)
     return (
       <div className="boot">
-        <div className="boot-mark">C∕S</div>
+        <BrandMark />
         <span>Connecting to ControlSurface…</span>
       </div>
     );
@@ -863,9 +870,7 @@ export default function Home() {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">
-            C<span>∕</span>S
-          </div>
+          <BrandMark />
           <div>
             <strong>ControlSurface</strong>
             <small>Production engineering</small>
@@ -1887,7 +1892,9 @@ function RegressionModal({
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
-  closeRef.current = onClose;
+  useEffect(() => {
+    closeRef.current = onClose;
+  }, [onClose]);
   useEffect(() => {
     const previous =
       document.activeElement instanceof HTMLElement

@@ -4,7 +4,7 @@ Status: **local pre-release candidate, not public-release sign-off** · 2026-09-
 
 ## Project status
 
-The deterministic closed loop passed on a fresh disposable Docker stack: Python SDK → authenticated OTLP → durable inbox → ClickHouse traces and agent-run graph → Production Health → breaking payment-tool schema → failure cluster → incident with ranked change evidence → reviewed production-derived regression → broken candidate BLOCK → fixed candidate PASS → content-hashed release evidence. The latest clean-stack seed-and-verify test completed in 106.27 seconds and also checked captured model output and payment-tool arguments in the stored trace. An authenticated Chromium test then exercised the visible investigation and release-evidence path. The test-only stack and its volumes were removed afterward; the development volumes were retained.
+The deterministic closed loop passed on a fresh disposable Docker stack: Python SDK → authenticated OTLP → durable inbox → ClickHouse traces and agent-run graph → Production Health → breaking payment-tool schema → failure cluster → incident with ranked change evidence → reviewed production-derived regression → broken candidate BLOCK → fixed candidate PASS → content-hashed release evidence. The latest clean-stack seed-and-verify test completed in 103.53 seconds and also checked captured model output and payment-tool arguments in the stored trace. An authenticated Chromium test then exercised the visible investigation, release-evidence, logout, and redesigned sign-in path. The test-only stack and its volumes were removed afterward; the development volumes were retained.
 
 This proves a representative local path, not production readiness. Broader browser/accessibility interaction, large-scale performance, remote deployment security, and binary redistribution reviews remain open.
 
@@ -25,7 +25,7 @@ ControlSurface is an original modular Python control plane, separate OTLP receiv
 
 ## UI foundation, adapted components, and original UI work
 
-The application and shell are independently authored. **No UI source, components, styles, assets, or text were adapted from private research material.** Production Health is the landing page; traces are supporting evidence. Functional surfaces include traces/sessions, clusters/incidents, Change Ledger, regression review, datasets and items, release-evidence inspection, SLO policies, and API keys. Trace detail shows the execution tree and contextual tabs for captured input/output, model settings, tokens/cost, tool arguments/results, retrieval, errors, events, and metadata. A disposable authenticated Chromium test now traverses Health, incident/change evidence, a representative trace, regression review, dataset-item creation, release-evidence detail, and logout; it also checks Health at a narrow viewport. This exposed and led to fixes for a build-time API URL mismatch and a stale cross-page data crash. Broader browser, visual, and accessibility QA remains open.
+The application and shell are independently authored. **No UI source, components, styles, assets, or text were adapted from private research material.** Production Health is the landing page; traces are supporting evidence. Functional surfaces include traces/sessions, clusters/incidents, Change Ledger, regression review, datasets and items, release-evidence inspection, SLO policies, and API keys. Trace detail shows the execution tree and contextual tabs for captured input/output, model settings, tokens/cost, tool arguments/results, retrieval, errors, events, and metadata. The auth screen now uses the dark navy/blue-violet brand system, an original geometric mark and wordmark component, a compact login panel, and a labeled illustrative product preview that collapses to a small health preview on mobile. The preview figures are **not live metrics**. The rest of the authenticated application receives the shared palette and mark, but its page layouts have not been comprehensively redesigned. A disposable Chromium test traverses the investigation path, dataset and release detail, logout, mobile auth width, and real UI sign-in back to Production Health. Broader browser, visual, and accessibility QA remains open.
 
 ## Backend and databases
 
@@ -58,9 +58,9 @@ The gate validates paired case IDs, rejects duplicates, applies versioned thresh
 ## Test results
 
 - Python unit/SDK suite: **25 passed**, with two opt-in end-to-end tests skipped in the ordinary run; one Python 3.16 deprecation warning from a dependency.
-- Disposable Docker full-stack hero test: **1 passed in 106.27 seconds** on the latest seeded run. It exercised owner-session CSRF rejection, project-key precedence, project isolation, dataset API, OTLP ingest, captured model/tool context, Health, graph/cluster/incident/change evidence, regression suite export, paired evaluations, BLOCK/PASS gates, manifest hashes, and evidence verification.
-- Authenticated Chromium workflow: **1 passed in 3.1 seconds** on the seeded disposable stack, including a loaded 390px Health view; a separate real-service login-limit test **passed in 42.73 seconds** after browser logout, verifying HTTP 429 and `Retry-After`.
-- Ruff lint/format, full backend/SDK mypy (20 source files), web TypeScript typecheck, Prettier check, and Next.js production build pass locally.
+- Disposable Docker full-stack hero test: **1 passed in 103.53 seconds** on the latest seeded run. It exercised owner-session CSRF rejection, project-key precedence, project isolation, dataset API, OTLP ingest, captured model/tool context, Health, graph/cluster/incident/change evidence, regression suite export, paired evaluations, BLOCK/PASS gates, manifest hashes, and evidence verification.
+- Authenticated Chromium workflow: **1 passed in 3.1 seconds** on the seeded disposable stack, including a loaded 390px Health view, the redesigned desktop/mobile auth states, and real UI sign-in after logout; a separate real-service login-limit test **passed in 36.78 seconds**, verifying HTTP 429 and `Retry-After`.
+- Ruff lint/format, full backend/SDK mypy (20 source files), web ESLint, TypeScript typecheck, Prettier check, and Next.js production build pass locally.
 - GitHub Actions defines quality and disposable full-stack jobs, including the seeded Chromium workflow, but it has not yet run on the eventual public repository. Multi-browser, accessibility, and wider interaction-state tests are not present.
 
 ## Benchmarks
@@ -75,7 +75,7 @@ The private research archives, audits, and provenance ledger are outside this re
 
 ## Known limitations and deferred features
 
-This is a self-hosted single-owner/multiple-project local V1, not a hardened multi-user hosted service. Online evaluation jobs, general LLM judges, advanced drift, persistent error budgets, broad framework auto-instrumentation, coding-agent integrations, comprehensive alert delivery, managed retention, backup/restore automation, and distributed ingestion are deferred. Browser automation covers one happy-path workflow, not every page or failure state. There is no published Python package or container image.
+This is a self-hosted single-owner/multiple-project local V1, not a hardened multi-user hosted service. Online evaluation jobs, general LLM judges, advanced drift, persistent error budgets, broad framework auto-instrumentation, coding-agent integrations, comprehensive alert delivery, managed retention, backup/restore automation, and distributed ingestion are deferred. Browser automation covers one happy-path workflow, not every page or failure state. An isolated first boot exposed a ClickHouse initialization/health-check race: the first migration attempt failed to connect, then succeeded on Compose retry. Startup readiness needs hardening before release. There is no published Python package or container image.
 
 ## Local run and demo
 
@@ -83,7 +83,7 @@ Follow [README.md](README.md): set independent `.env` secrets, run `docker compo
 
 ## GitHub readiness
 
-**Not ready to push.** The scripted and one authenticated browser closed loop are verified, but broader browser/accessibility QA, dependency/container licensing, secret scanning of a proposed release commit, remote-deployment security, operator recovery procedures, and broader performance validation remain open. Do not treat this report as a public-release approval.
+**Not ready to push.** The scripted and one authenticated browser closed loop are verified, but the first-start migration race, broader browser/accessibility QA, dependency/container licensing, secret scanning of a proposed release commit, remote-deployment security, operator recovery procedures, and broader performance validation remain open. Do not treat this report as a public-release approval.
 
 ## Top 20 next issues
 
