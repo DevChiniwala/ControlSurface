@@ -47,7 +47,8 @@ services:
       CS_CH_PASSWORD: ${CS_CH_PASSWORD}
       CS_CH_DATABASE: controlsurface
       CS_BOOTSTRAP_TOKEN: ${CS_BOOTSTRAP_TOKEN:?Set CS_BOOTSTRAP_TOKEN in .env}
-      CS_COOKIE_SECURE: "false"
+      CS_COOKIE_SECURE: ${CS_COOKIE_SECURE:-false}
+      CS_CORS_ORIGINS: ${CS_CORS_ORIGINS:-http://localhost:3000}
       CS_MIGRATIONS_DIR: /app/migrations
     depends_on:
       postgres:
@@ -95,8 +96,10 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_CONTROL_API: ${CS_PUBLIC_API_URL:-http://localhost:8000}
     environment:
-      NEXT_PUBLIC_CONTROL_API: http://localhost:8000
+      NEXT_PUBLIC_CONTROL_API: ${CS_PUBLIC_API_URL:-http://localhost:8000}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:

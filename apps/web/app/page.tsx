@@ -525,7 +525,11 @@ export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [page, setPage] = useState<Page>("health");
-  const [data, setData] = useState<unknown>(null);
+  const [resource, setResource] = useState<{
+    projectId: string;
+    page: Page;
+    value: unknown;
+  } | null>(null);
   const [detail, setDetail] = useState<TraceDetail | null>(null);
   const [regressionReview, setRegressionReview] =
     useState<RegressionReview | null>(null);
@@ -539,6 +543,10 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [keyOnce, setKeyOnce] = useState("");
   const [form, setForm] = useState("");
+  const data =
+    resource?.projectId === projectId && resource.page === page
+      ? resource.value
+      : null;
 
   const refreshIdentity = useCallback(async () => {
     try {
@@ -578,9 +586,10 @@ export default function Home() {
     if (!projectId) return;
     setLoading(true);
     setError("");
-    setData(null);
+    setResource(null);
     try {
-      setData(await request(`/api/projects/${projectId}/${path[page]}`));
+      const value = await request(`/api/projects/${projectId}/${path[page]}`);
+      setResource({ projectId, page, value });
     } catch (e) {
       setError((e as Error).message);
     } finally {

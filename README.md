@@ -6,7 +6,7 @@ Observe · Evaluate · Monitor · Diagnose · Ship
 
 ControlSurface connects production telemetry to agent run graphs, reliability monitoring, incidents, production-derived regression tests, and reproducible release decisions.
 
-> Pre-release V1: this is a local self-hosted development build. The deterministic refund-agent lifecycle passed on a fresh disposable stack on 2026-09-20. Security, browser, performance, and binary-license reviews remain before public release. Do not use it as the sole release control for production.
+> Pre-release V1: this is a local self-hosted development build. The deterministic refund-agent lifecycle and one authenticated Chromium workflow passed on a fresh disposable stack on 2026-09-20. Broader security, accessibility, performance, and binary-license reviews remain before public release. Do not use it as the sole release control for production.
 
 ## Run locally
 
@@ -18,6 +18,8 @@ Requirements: Docker Desktop with Compose, Python 3.11+, and available ports 300
 4. Install the local SDK/CLI: `python -m pip install -e sdk/python`. Set `CONTROLSURFACE_API_KEY` to your key. Get the project ID from `GET http://localhost:8000/api/projects` with `Authorization: Bearer <key>`, set `CONTROLSURFACE_PROJECT_ID`, and run `controlsurface doctor`.
 
 OTLP/HTTP is at `http://localhost:4318/v1/traces`; OTLP/gRPC is at `localhost:4317`. The API is at `http://localhost:8000`.
+
+If you change the browser-facing API origin, set `CS_PUBLIC_API_URL` and the matching `CS_CORS_ORIGINS` in `.env`, then rebuild the web image. `NEXT_PUBLIC_CONTROL_API` is embedded in the browser bundle at build time; changing only a container runtime variable will not retarget an existing image.
 
 ```python
 from controlsurface import ControlSurface
