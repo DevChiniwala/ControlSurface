@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .auth import (
+    LoginRateLimiter,
     browser_user,
     create_api_key,
     create_browser_session,
@@ -30,6 +31,7 @@ from .settings import Settings, load_settings
 from .storage import clickhouse, postgres
 
 app = FastAPI(title="ControlSurface API", version="0.1.0")
+_login_attempts = LoginRateLimiter()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CS_CORS_ORIGINS", "http://localhost:3000").split(","),
@@ -191,8 +193,16 @@ def setup(
 
 @app.post("/api/login")
 def login(
-    data: LoginInput, response: Response, settings: Settings = Depends(_settings)
+    data: LoginInput,
+    request: Request,
+    response: Response,
+    settings: Settings = Depends(_settings),
 ) -> dict[str, str]:
+    retry_after = _login_attempts.acquire(request.client.host if request.client else "unknown")
+    if retry_after:
+        raise HTTPException(
+            429, "Too many login attempts", headers={"Retry-After": str(retry_after)}
+        )
     with postgres(settings) as connection:
         user_id = verify_password(connection, data.email, data.password)
         if not user_id:

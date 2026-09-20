@@ -469,3 +469,20 @@ def test_failure_to_reproducible_release_decision(tmp_path: Path) -> None:
 
     with urllib.request.urlopen(web, timeout=30) as response:
         assert response.status == 200
+
+    for _ in range(20):
+        with pytest.raises(urllib.error.HTTPError) as invalid_login:
+            _request(
+                f"{base}/api/login",
+                method="POST",
+                body={"email": "nobody@example.invalid", "password": "incorrect"},
+            )
+        assert invalid_login.value.code == 401
+    with pytest.raises(urllib.error.HTTPError) as limited_login:
+        _request(
+            f"{base}/api/login",
+            method="POST",
+            body={"email": "nobody@example.invalid", "password": "incorrect"},
+        )
+    assert limited_login.value.code == 429
+    assert int(limited_login.value.headers["Retry-After"]) > 0

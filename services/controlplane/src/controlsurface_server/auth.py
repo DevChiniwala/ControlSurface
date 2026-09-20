@@ -4,15 +4,64 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import secrets
 import uuid
+from collections import deque
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from threading import Lock
+from time import monotonic
 
 from argon2 import PasswordHasher
 
 from .storage import DbConnection
 
 _passwords = PasswordHasher()
+
+
+class LoginRateLimiter:
+    """Bounded, process-local login admission control for the single-owner deployment."""
+
+    def __init__(
+        self,
+        max_attempts: int = 20,
+        window_seconds: float = 300,
+        max_clients: int = 2048,
+        clock: Callable[[], float] = monotonic,
+    ) -> None:
+        if max_attempts < 1 or window_seconds <= 0 or max_clients < 1:
+            raise ValueError("Login rate limits must be positive")
+        self.max_attempts = max_attempts
+        self.window_seconds = window_seconds
+        self.max_clients = max_clients
+        self.clock = clock
+        self._attempts: dict[str, deque[float]] = {}
+        self._lock = Lock()
+
+    def acquire(self, client: str) -> int:
+        """Record an attempt; return zero or the whole seconds to retry."""
+        now = self.clock()
+        cutoff = now - self.window_seconds
+        with self._lock:
+            attempts = self._attempts.get(client)
+            if attempts is None:
+                if len(self._attempts) >= self.max_clients:
+                    for name, previous in list(self._attempts.items()):
+                        while previous and previous[0] <= cutoff:
+                            previous.popleft()
+                        if not previous:
+                            del self._attempts[name]
+                if len(self._attempts) >= self.max_clients:
+                    return math.ceil(self.window_seconds)
+                attempts = deque()
+                self._attempts[client] = attempts
+            while attempts and attempts[0] <= cutoff:
+                attempts.popleft()
+            if len(attempts) >= self.max_attempts:
+                return max(1, math.ceil(attempts[0] + self.window_seconds - now))
+            attempts.append(now)
+            return 0
 
 
 def _digest(value: str) -> bytes:
