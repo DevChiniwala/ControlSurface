@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title description">
+  <title id="title">ControlSurface</title>
+  <desc id="description">The production engineering platform for AI agents. A flow connects telemetry, agent run graphs, failure evidence, regressions, and release decisions.</desc>
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#55C2FF" />
+      <stop offset="0.48" stop-color="#4F6BFF" />
+      <stop offset="1" stop-color="#7657FF" />
+    </linearGradient>
+    <linearGradient id="headline" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#F7F9FC" />
+      <stop offset="1" stop-color="#92ACFF" />
+    </linearGradient>
+    <radialGradient id="glow-blue">
+      <stop offset="0" stop-color="#355BDB" stop-opacity="0.27" />
+      <stop offset="1" stop-color="#355BDB" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="glow-violet">
+      <stop offset="0" stop-color="#7657FF" stop-opacity="0.18" />
+      <stop offset="1" stop-color="#7657FF" stop-opacity="0" />
+    </radialGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#506287" stroke-opacity="0.09" stroke-width="1" />
+    </pattern>
+    <clipPath id="bounds"><rect width="1200" height="420" rx="20" /></clipPath>
+  </defs>
+
+  <g clip-path="url(#bounds)">
+    <rect width="1200" height="420" fill="#060A15" />
+    <rect width="1200" height="420" fill="url(#grid)" />
+    <ellipse cx="930" cy="135" rx="470" ry="320" fill="url(#glow-blue)" />
+    <ellipse cx="1190" cy="390" rx="390" ry="250" fill="url(#glow-violet)" />
+
+    <g transform="translate(71 49) scale(0.68)">
+      <path fill="#F7F9FC" d="M139 6H70C31 6 7 32 7 68c0 35 25 58 62 58h5c15 0 24-3 34-12l18-16c8-7 3-20-8-20H69c-17 0-27-10-27-25 0-16 12-27 29-27h11c9 0 15-2 21-8L139 6Z" />
+      <path fill="url(#brand)" d="M82 46c14-15 28-22 45-19 21 3 33 21 33 45 0 25-15 46-35 55 9-25 4-44-18-47H67c-14 0-20-13-11-24l26-10Z" />
+    </g>
+    <text x="185" y="119" fill="#F7F9FC" font-family="Inter, Geist, Segoe UI, sans-serif" font-size="39" font-weight="700" letter-spacing="-2.5">Control<tspan fill="#ADB8CE">Surface</tspan></text>
+
+    <text x="80" y="199" fill="#9BADDB" font-family="Inter, Geist, Segoe UI, sans-serif" font-size="11" font-weight="700" letter-spacing="2.4">THE PRODUCTION ENGINEERING PLATFORM FOR AI AGENTS</text>
+    <text x="78" y="250" fill="url(#headline)" font-family="Inter, Geist, Segoe UI, sans-serif" font-size="35" font-weight="650" letter-spacing="-1.4">Telemetry to release decisions.</text>
+    <text x="80" y="293" fill="#A7B4CB" font-family="Inter, Geist, Segoe UI, sans-serif" font-size="16">Understand how agents behave. Turn failures into tests.</text>
+    <text x="80" y="319" fill="#A7B4CB" font-family="Inter, Geist, Segoe UI, sans-serif" font-size="16">Ship candidates with inspectable evidence.</text>
+    <line x1="80" y1="354" x2="600" y2="354" stroke="#526386" stroke-opacity="0.37" />
+    <text x="80" y="380" fill="#8998B8" font-family="Inter, Geist, Segoe UI, sans-serif" font-size="11" font-weight="650" letter-spacing="1.5">OBSERVE  ·  EVALUATE  ·  MONITOR  ·  DIAGNOSE  ·  SHIP</text>
+
+    <rect x="684" y="42" width="444" height="337" rx="16" fill="#0B1223" stroke="#5C70A7" stroke-opacity="0.3" />
+    <path d="M685 58 Q685 42 701 42 H1112" fill="none" stroke="url(#brand)" stroke-opacity="0.8" stroke-width="1.5" />
+    <text x="714" y="77" fill="#899BBB" font-family="Inter, Geist, Segoe UI, sans-serif" font-size="10" font-weight="700" letter-spacing="2">THE RELIABILITY LOOP</text>
+    <line x1="742" y1="114" x2="742" y2="323" stroke="#526AA7" stroke-opacity="0.55" stroke-width="2" />
+
+    <g font-family="Inter, Geist, Segoe UI, sans-serif">
+      <rect x="713" y="96" width="388" height="48" rx="7" fill="#111B2F" stroke="#526386" stroke-opacity="0.22" />
+      <circle cx="742" cy="120" r="6" fill="#55C2FF" />
+      <text x="763" y="117" fill="#F2F5FD" font-size="13" font-weight="650">Production telemetry</text>
+      <text x="763" y="133" fill="#8192B0" font-size="10">OTLP source spans and sessions</text>
+
+      <rect x="713" y="150" width="388" height="48" rx="7" fill="#111B2F" stroke="#526386" stroke-opacity="0.22" />
+      <circle cx="742" cy="174" r="6" fill="#7395FF" />
+      <text x="763" y="171" fill="#F2F5FD" font-size="13" font-weight="650">Agent run graph</text>
+      <text x="763" y="187" fill="#8192B0" font-size="10">Tools, retries, branches, outcomes</text>
+
+      <rect x="713" y="204" width="388" height="48" rx="7" fill="#111B2F" stroke="#526386" stroke-opacity="0.22" />
+      <circle cx="742" cy="228" r="6" fill="#8B85FF" />
+      <text x="763" y="225" fill="#F2F5FD" font-size="13" font-weight="650">Failure and change evidence</text>
+      <text x="763" y="241" fill="#8192B0" font-size="10">Clusters, incidents, ranked correlations</text>
+
+      <rect x="713" y="258" width="388" height="48" rx="7" fill="#111B2F" stroke="#526386" stroke-opacity="0.22" />
+      <circle cx="742" cy="282" r="6" fill="#A084FF" />
+      <text x="763" y="279" fill="#F2F5FD" font-size="13" font-weight="650">Production-derived regression</text>
+      <text x="763" y="295" fill="#8192B0" font-size="10">Review representative failures as cases</text>
+
+      <rect x="713" y="312" width="388" height="48" rx="7" fill="#17244B" stroke="#637AFF" stroke-opacity="0.45" />
+      <circle cx="742" cy="336" r="6" fill="url(#brand)" />
+      <text x="763" y="333" fill="#F2F5FD" font-size="13" font-weight="650">Release evidence</text>
+      <text x="763" y="349" fill="#A4B6E4" font-size="10">Reproducible pass or block decision</text>
+    </g>
+  </g>
+</svg>

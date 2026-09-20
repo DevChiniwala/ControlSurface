@@ -1,6 +1,6 @@
 # ControlSurface engineering report
 
-Status: **local pre-release candidate, not public-release sign-off** · 2026-09-20. No GitHub push or package publication has occurred. This report distinguishes verified behavior from remaining release gates.
+Status: **private-source pre-release candidate, not public-release sign-off** · 2026-09-20. Source may be synchronized to the owner's private GitHub repository; no package or container image has been published. This report distinguishes verified behavior from remaining release gates.
 
 ## Project status
 
@@ -83,7 +83,7 @@ Follow [README.md](README.md): set independent `.env` secrets, run `docker compo
 
 ## GitHub readiness
 
-**Not ready to push.** The scripted and one authenticated browser closed loop are verified, but the first-start migration race, broader browser/accessibility QA, dependency/container licensing, secret scanning of a proposed release commit, remote-deployment security, operator recovery procedures, and broader performance validation remain open. Do not treat this report as a public-release approval.
+**Private source sync only; not ready to make public or publish binaries.** The scripted and one authenticated browser closed loop are verified, but the first-start migration race, broader browser/accessibility QA, dependency/container licensing, remote-deployment security, operator recovery procedures, and broader performance validation remain open. Re-run secret and license checks on the exact public-release commit. Do not treat a private repository push as public-release approval.
 
 ## Top 20 next issues
 
