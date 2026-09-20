@@ -1,0 +1,7 @@
+{
+  "revision": "production-regression-v1",
+  "minimum_cases": 1,
+  "maximum_regressions": 0,
+  "minimum_tool_accuracy_delta": -0.01,
+  "minimum_quality_delta": 0
+}

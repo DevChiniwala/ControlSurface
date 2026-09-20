@@ -1,0 +1,31 @@
+{
+  "revision": "refund-suite-v1",
+  "cases": [
+    {
+      "id": "duplicate-charge",
+      "input": { "message": "I was charged twice for my order" },
+      "expected": {
+        "completion": true,
+        "required_tools": ["lookup_transactions", "verify_duplicate", "payments.refund"],
+        "forbidden_tools": ["create_payment"],
+        "maximum_steps": 6,
+        "schema": {"type": "object", "properties": {"refunded": {"const": true}}, "required": ["refunded"]}
+      }
+    },
+    {
+      "id": "duplicate-payment-wording",
+      "input": { "message": "There is a duplicate payment on my account" },
+      "expected": {
+        "completion": true,
+        "required_tools": ["lookup_transactions", "verify_duplicate", "payments.refund"],
+        "forbidden_tools": ["create_payment"],
+        "maximum_steps": 6
+      }
+    },
+    {
+      "id": "ordinary-question",
+      "input": { "message": "Where is my receipt?" },
+      "expected": {"completion": true, "forbidden_tools": ["payments.refund"]}
+    }
+  ]
+}

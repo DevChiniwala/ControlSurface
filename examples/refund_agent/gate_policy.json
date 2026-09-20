@@ -1,0 +1,7 @@
+{
+  "revision": "refund-gate-v1",
+  "minimum_cases": 3,
+  "maximum_regressions": 0,
+  "minimum_tool_accuracy_delta": -0.01,
+  "critical_case_ids": ["duplicate-charge", "duplicate-payment-wording"]
+}

@@ -1,0 +1,107 @@
+name: controlsurface
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: controlsurface
+      POSTGRES_DB: controlsurface
+      POSTGRES_PASSWORD: ${CS_DB_PASSWORD:?Set CS_DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U controlsurface -d controlsurface"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8
+    environment:
+      CLICKHOUSE_DB: controlsurface
+      CLICKHOUSE_USER: controlsurface
+      CLICKHOUSE_PASSWORD: ${CS_CH_PASSWORD:?Set CS_CH_PASSWORD in .env}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "127.0.0.1:58123:8123"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8123/ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    build:
+      context: .
+      dockerfile: services/controlplane/Dockerfile
+    command: ["python", "-m", "controlsurface_server.migrate"]
+    environment: &backend_env
+      CS_DATABASE_URL: postgresql://controlsurface:${CS_DB_PASSWORD}@postgres:5432/controlsurface
+      CS_CH_HOST: clickhouse
+      CS_CH_PORT: "8123"
+      CS_CH_USER: controlsurface
+      CS_CH_PASSWORD: ${CS_CH_PASSWORD}
+      CS_CH_DATABASE: controlsurface
+      CS_BOOTSTRAP_TOKEN: ${CS_BOOTSTRAP_TOKEN:?Set CS_BOOTSTRAP_TOKEN in .env}
+      CS_COOKIE_SECURE: "false"
+      CS_MIGRATIONS_DIR: /app/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: services/controlplane/Dockerfile
+    command: ["uvicorn", "controlsurface_server.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment: *backend_env
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  ingest:
+    build:
+      context: .
+      dockerfile: services/controlplane/Dockerfile
+    command: ["python", "-m", "controlsurface_server.ingest_server"]
+    environment: *backend_env
+    ports:
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:4317:4317"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: .
+      dockerfile: services/controlplane/Dockerfile
+    command: ["python", "-m", "controlsurface_server.worker"]
+    environment: *backend_env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NEXT_PUBLIC_CONTROL_API: http://localhost:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  clickhouse_data:
