@@ -10,7 +10,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -347,6 +347,7 @@ def revoke_key(
 def traces(
     project_id: uuid.UUID,
     agent: str | None = None,
+    session: str | None = Query(default=None, max_length=512),
     status: str | None = None,
     limit: int = 50,
     before: datetime | None = None,
@@ -361,12 +362,15 @@ def traces(
         "cost_nano_usd, status FROM trace_summaries FINAL "
         "WHERE project_id = {project_id:UUID} "
         "AND ({agent:String} = '' OR agent_name = {agent:String}) "
+        "AND ({filter_session:UInt8} = 0 OR session_id = {session:String}) "
         "AND ({status:String} = '' OR status = {status:String}) "
         "AND start_time < {before:DateTime64(9)} "
         "ORDER BY start_time DESC LIMIT {limit:UInt32}",
         {
             "project_id": str(project_id),
             "agent": agent or "",
+            "session": session or "",
+            "filter_session": int(session is not None),
             "status": status or "",
             "before": before or datetime.now(UTC) + timedelta(days=1),
             "limit": limit,

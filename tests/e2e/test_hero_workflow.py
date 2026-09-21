@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -229,6 +230,14 @@ def test_failure_to_reproducible_release_decision(tmp_path: Path) -> None:
         and "controlsurface.tool.arguments" in span["attributes"]
         for span in detail["spans"]
     )
+    session_id = detail["spans"][0]["session_id"]
+    session_runs = _request(
+        f"{project_url}/traces?session={urllib.parse.quote(session_id)}",
+        headers=auth,
+    )
+    assert session_runs
+    assert all(run["session_id"] == session_id for run in session_runs)
+    assert any(run["trace_id"] == representative_id for run in session_runs)
 
     incidents = _request(f"{project_url}/incidents", headers=auth)
     incident = next(
