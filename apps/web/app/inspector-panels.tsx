@@ -33,6 +33,13 @@ function parseObject(value: string): JsonObject {
   return parsed as JsonObject;
 }
 
+function displayVersion(value: unknown): string {
+  const version = String(value);
+  return version.length > 52
+    ? `${version.slice(0, 38)}…${version.slice(-8)}`
+    : version;
+}
+
 export function DatasetPanel({
   dataset,
   loadItems,
@@ -232,13 +239,32 @@ export function EvidencePanel({
           </span>
         </div>
         <div className="detail-intro">
-          <h2 id="evidence-title">{String(manifest.candidate_version)}</h2>
+          <h2 id="evidence-title" title={String(manifest.candidate_version)}>
+            {displayVersion(manifest.candidate_version)}
+          </h2>
           <div className="detail-meta">
-            <span>Baseline {String(manifest.baseline_version)}</span>
+            <span title={String(manifest.baseline_version)}>
+              Baseline {displayVersion(manifest.baseline_version)}
+            </span>
             <span>{bundle.candidate_results.length} paired cases</span>
           </div>
         </div>
         <div className="inspector-content">
+          <div
+            className={`gate-decision ${decision.passed ? "passed" : "blocked"}`}
+          >
+            <span>RELEASE DECISION</span>
+            <strong>
+              {decision.passed ? "READY TO SHIP" : "RELEASE BLOCKED"}
+            </strong>
+            <p>
+              {Array.isArray(decision.reasons) && decision.reasons.length
+                ? decision.reasons.join(" · ")
+                : decision.passed
+                  ? "All configured gate checks passed."
+                  : "Review the failed checks in this evidence bundle."}
+            </p>
+          </div>
           <div className="evidence-hash">
             <span>CONTENT SHA-256</span>
             <code>{bundle.sha256}</code>

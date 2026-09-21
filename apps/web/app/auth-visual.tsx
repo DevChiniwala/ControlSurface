@@ -25,6 +25,18 @@ const runRows = [
 export function AuthVisual() {
   return (
     <aside className="auth-showcase">
+      <div className="auth-showcase-copy">
+        <span className="auth-kicker">
+          Production engineering for AI agents
+        </span>
+        <h2>
+          Ship reliable <span>AI agents.</span>
+        </h2>
+        <p>Observe, evaluate, diagnose, and ship with confidence.</p>
+        <div className="auth-sequence">
+          OBSERVE <b>·</b> EVALUATE <b>·</b> DIAGNOSE <b>·</b> SHIP
+        </div>
+      </div>
       <div className="auth-preview-caption">Illustrative product preview</div>
       <div className="auth-preview-scene" aria-hidden="true">
         <div className="auth-preview-glow" />
@@ -51,11 +63,6 @@ export function AuthVisual() {
             </header>
             <div className="preview-metrics">
               <div>
-                <span>Agents healthy</span>
-                <strong>11 / 13</strong>
-                <small>Across production</small>
-              </div>
-              <div>
                 <span>Success rate</span>
                 <strong>98.2%</strong>
                 <svg viewBox="0 0 70 18" aria-hidden="true">
@@ -68,6 +75,11 @@ export function AuthVisual() {
                 <svg viewBox="0 0 70 18" aria-hidden="true">
                   <path d="M1 5 12 7 23 4 35 11 45 9 55 12 69 8" />
                 </svg>
+              </div>
+              <div>
+                <span>Error rate</span>
+                <strong>1.8%</strong>
+                <small>Across production</small>
               </div>
               <div>
                 <span>Open incidents</span>
@@ -160,18 +172,6 @@ export function AuthVisual() {
           <span className="gate-warning">
             <AlertTriangle size={13} /> Tool reliability <em>Review</em>
           </span>
-        </div>
-      </div>
-      <div className="auth-showcase-copy">
-        <span className="auth-kicker">
-          Production engineering for AI agents
-        </span>
-        <h2>
-          Ship reliable <span>AI agents.</span>
-        </h2>
-        <p>Observe, evaluate, diagnose, and ship with confidence.</p>
-        <div className="auth-sequence">
-          OBSERVE <b>·</b> EVALUATE <b>·</b> DIAGNOSE <b>·</b> SHIP
         </div>
       </div>
     </aside>

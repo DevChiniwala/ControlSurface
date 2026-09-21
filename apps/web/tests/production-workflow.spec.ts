@@ -9,7 +9,7 @@ const api = process.env.CONTROLSURFACE_API_URL || "http://localhost:8000";
 
 test("production health to incident evidence, run, dataset, and release decision", async ({
   page,
-}) => {
+}, testInfo) => {
   const login = await page.request.post(`${api}/api/login`, {
     data: {
       email: "ci-owner@example.invalid",
@@ -26,7 +26,10 @@ test("production health to incident evidence, run, dataset, and release decision
   await page.getByRole("combobox", { name: "Project" }).selectOption({
     label: "Refund reliability",
   });
-  await expect(page.getByText("refund-agent", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "refund-agent" }).first(),
+  ).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("production-health.png") });
 
   await navigation
     .getByRole("button", { name: "Incidents", exact: true })
@@ -41,13 +44,19 @@ test("production health to incident evidence, run, dataset, and release decision
   await expect(page.locator(".candidate").first()).toContainText(
     "payments.refund",
   );
-  await page.locator(".representative-link").first().click();
-  await expect(page.locator(".trace-tree")).toBeVisible();
-  await page.getByRole("button", { name: "Create regression" }).click();
+  await page.screenshot({ path: testInfo.outputPath("incident-evidence.png") });
+  await page.getByRole("button", { name: "Create regression case" }).click();
   const review = page.getByRole("dialog", { name: "Review regression case" });
   await expect(review).toBeVisible();
   await expect(review.getByLabel("Input JSON")).not.toBeEmpty();
   await review.getByRole("button", { name: "Close regression review" }).click();
+  await expect(page.locator(".trace-tree")).toBeVisible();
+  const execution = page.getByRole("region", { name: "Agent execution flow" });
+  await expect(execution).toBeVisible();
+  await execution.getByRole("button", { name: "Timeline" }).click();
+  await expect(execution.locator(".trace-waterfall").first()).toBeVisible();
+  await execution.getByRole("button", { name: "Transcript" }).click();
+  await page.screenshot({ path: testInfo.outputPath("agent-execution.png") });
   await page.getByRole("button", { name: "Close trace" }).click();
 
   await navigation
@@ -58,7 +67,7 @@ test("production health to incident evidence, run, dataset, and release decision
   ).toBeVisible();
   await page.getByRole("button", { name: "Refund scenarios" }).click();
   const dataset = page.getByRole("dialog", { name: "Refund scenarios" });
-  await expect(dataset.getByText("SCENARIO 1")).toBeVisible();
+  await expect(dataset.getByText("SCENARIO 1", { exact: true })).toBeVisible();
   await dataset.getByLabel("Input JSON").fill('{"message":"ui-browser-check"}');
   await dataset
     .getByLabel("Expected behavior JSON")
@@ -74,24 +83,36 @@ test("production health to incident evidence, run, dataset, and release decision
   ).toBeVisible();
   await dataset.getByRole("button", { name: "Close dataset" }).click();
 
-  await navigation.getByRole("button", { name: "Release evidence" }).click();
+  await navigation.getByRole("button", { name: "Release Gates" }).click();
   await expect(
-    page.getByRole("heading", { name: "Release evidence" }),
+    page.getByRole("heading", { name: "Release Gates" }),
   ).toBeVisible();
   await page.locator(".table-panel tbody button").first().click();
   const evidence = page.getByRole("dialog", { name: /refund-agent@/ });
+  await expect(evidence.locator(".gate-decision")).toBeVisible();
   await expect(evidence.getByText("CONTENT SHA-256")).toBeVisible();
   await expect(evidence.getByText("Regressed cases")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("release-decision.png") });
   await evidence
     .getByRole("button", { name: "Close release evidence" })
     .click();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await navigation.getByRole("button", { name: "Health", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Open navigation", exact: true })
+    .click();
+  await navigation
+    .getByRole("button", { name: "Overview", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Production Health" }),
   ).toBeVisible();
-  await expect(page.getByText("refund-agent", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "refund-agent" }).first(),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("production-health-mobile.png"),
+  });
   const documentWidth = await page.evaluate(
     () => document.documentElement.scrollWidth,
   );
@@ -103,6 +124,7 @@ test("production health to incident evidence, run, dataset, and release decision
     page.getByRole("heading", { name: "Welcome back" }),
   ).toBeVisible();
   await expect(page.getByText("Illustrative product preview")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("auth-desktop.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByLabel("Illustrative production health preview"),
@@ -116,4 +138,49 @@ test("production health to incident evidence, run, dataset, and release decision
   await expect(
     page.getByRole("heading", { name: "Production Health" }),
   ).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  for (const [navigationLabel, heading] of [
+    ["Traces", "Traces"],
+    ["Sessions", "Sessions"],
+    ["Failure Clusters", "Failure clusters"],
+    ["Change Ledger", "Change ledger"],
+    ["Regression Cases", "Regression cases"],
+    ["SLOs", "SLOs"],
+    ["API Keys", "API keys"],
+  ]) {
+    await navigation
+      .getByRole("button", { name: navigationLabel, exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: heading, exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".skeleton-row")).toHaveCount(0);
+    await page.screenshot({
+      path: testInfo.outputPath(
+        `view-${navigationLabel.toLowerCase().replaceAll(" ", "-")}.png`,
+      ),
+    });
+    if (navigationLabel === "Sessions") {
+      await page.locator(".table-panel tbody .row-link").first().click();
+      const session = page.getByRole("dialog", { name: /^Session / });
+      await expect(session.locator("tbody tr").first()).toBeVisible();
+      await session.getByRole("button", { name: "Close session" }).click();
+    }
+    if (navigationLabel === "Failure Clusters") {
+      await expect(page.locator(".cluster-distribution")).toContainText(
+        "sampled failed runs",
+      );
+    }
+    if (navigationLabel === "SLOs") {
+      await expect(page.locator(".slo-measure").first()).toContainText(
+        "Target",
+      );
+    }
+  }
+  await page.keyboard.press("Control+k");
+  const palette = page.getByRole("dialog", { name: "Navigate ControlSurface" });
+  await expect(palette).toBeVisible();
+  await palette.getByRole("textbox", { name: "Find a view" }).fill("SLOs");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "SLOs" })).toBeVisible();
 });

@@ -9,6 +9,9 @@ import {
   type EvidenceBundle,
 } from "./inspector-panels";
 import { SpanInspector, type InspectedSpan } from "./span-inspector";
+import { ExecutionFlow } from "./execution-flow";
+import { SessionPanel, type SessionSummary } from "./session-panel";
+import { CommandPalette } from "./command-palette";
 import { usePanelFocus } from "./use-panel-focus";
 import { AuthVisual, MobileHealthPreview } from "./auth-visual";
 import { BrandIdentity, BrandMark } from "./brand";
@@ -27,6 +30,7 @@ import {
   KeyRound,
   Layers3,
   LogOut,
+  Menu,
   Plus,
   RefreshCw,
   Search,
@@ -64,15 +68,27 @@ type AgentHealth = {
   agent_name: string;
   runs: number;
   failed_runs: number;
+  completion_rate: number;
+  tool_success_rate: number | null;
+  tool_calls: number;
   p95_latency_ms: number;
   cost_nano_usd: number;
   health: string;
+  breaches: string[];
   last_seen: string;
 };
 type Health = {
   window_hours: number;
   agents: AgentHealth[];
   open_incidents: number;
+};
+type OverviewData = Health & {
+  incidents: Incident[];
+  traces: Trace[];
+};
+type SloViewData = {
+  policies: RecordValue[];
+  health: Health;
 };
 type Cluster = {
   signature: string;
@@ -89,6 +105,9 @@ type Incident = {
   status: string;
   affected_runs: number;
   created_at: string;
+  first_seen?: string;
+  last_seen?: string;
+  agent_name?: string;
   evidence_json?: RecordValue;
   cluster_signature: string;
 };
@@ -143,35 +162,45 @@ const navigation: {
   items: { id: Page; label: string; icon: typeof Activity }[];
 }[] = [
   {
-    label: "PRODUCTION",
+    label: "WORKSPACE",
+    items: [{ id: "health", label: "Overview", icon: Activity }],
+  },
+  {
+    label: "OBSERVE",
     items: [
-      { id: "health", label: "Health", icon: Activity },
       { id: "traces", label: "Traces", icon: Workflow },
       { id: "sessions", label: "Sessions", icon: Layers3 },
     ],
   },
   {
-    label: "DIAGNOSE",
+    label: "EVALUATE",
+    items: [{ id: "datasets", label: "Datasets", icon: Database }],
+  },
+  {
+    label: "MONITOR",
+    items: [{ id: "slos", label: "SLOs", icon: SlidersHorizontal }],
+  },
+  {
+    label: "INCIDENTS",
     items: [
-      { id: "clusters", label: "Failure clusters", icon: Fingerprint },
       { id: "incidents", label: "Incidents", icon: ShieldAlert },
-      { id: "changes", label: "Change ledger", icon: GitBranch },
+      { id: "clusters", label: "Failure Clusters", icon: Fingerprint },
+      { id: "changes", label: "Change Ledger", icon: GitBranch },
     ],
   },
   {
     label: "IMPROVE",
     items: [
-      { id: "regressions", label: "Regression cases", icon: ClipboardList },
-      { id: "datasets", label: "Datasets", icon: Database },
-      { id: "release", label: "Release evidence", icon: Check },
+      { id: "regressions", label: "Regression Cases", icon: ClipboardList },
     ],
   },
   {
+    label: "RELEASE",
+    items: [{ id: "release", label: "Release Gates", icon: Check }],
+  },
+  {
     label: "SETTINGS",
-    items: [
-      { id: "slos", label: "SLO policies", icon: SlidersHorizontal },
-      { id: "keys", label: "API keys", icon: KeyRound },
-    ],
+    items: [{ id: "keys", label: "API Keys", icon: KeyRound }],
   },
 ];
 
@@ -291,6 +320,50 @@ function SectionHeading({
   );
 }
 
+function ClusterDistribution({ clusters }: { clusters: Cluster[] }) {
+  const total = clusters.reduce((sum, cluster) => sum + cluster.count, 0);
+  return (
+    <div className="panel cluster-distribution">
+      <div className="cluster-distribution-heading">
+        <div>
+          <span className="eyebrow">RECENT FAILURE PATTERNS</span>
+          <strong>{total.toLocaleString()} sampled failed runs</strong>
+        </div>
+        <span>
+          {clusters.length} distinct signatures · latest 2,000 failed runs
+        </span>
+      </div>
+      <div className="cluster-distribution-list">
+        {clusters.slice(0, 5).map((cluster) => {
+          const label = String(
+            cluster.features.failed_tool ||
+              cluster.features.error_type ||
+              "Agent execution failure",
+          );
+          const share = total ? (cluster.count / total) * 100 : 0;
+          return (
+            <div className="cluster-distribution-row" key={cluster.signature}>
+              <span title={label}>{label}</span>
+              <div
+                className="cluster-distribution-track"
+                role="meter"
+                aria-label={`${label} share of failed runs`}
+                aria-valuenow={Math.round(share)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <span style={{ width: `${share}%` }} />
+              </div>
+              <strong>{share.toFixed(1)}%</strong>
+              <small>{cluster.count.toLocaleString()} runs</small>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Auth({
   configured,
   onAuthenticated,
@@ -332,6 +405,12 @@ function Auth({
       </header>
       <div className="auth-stage">
         <main className="auth-main">
+          <div className="auth-mobile-intro">
+            <strong>
+              Ship reliable <span>AI agents.</span>
+            </strong>
+            <p>Observe, evaluate, diagnose, and ship with confidence.</p>
+          </div>
           <div className="auth-card">
             <span className="auth-kicker">CONTROL SURFACE WORKSPACE</span>
             <h1>{configured ? "Welcome back" : "Set up your control plane"}</h1>
@@ -528,6 +607,11 @@ function SpanTree({
             )}
             {unlinkedRows}
           </div>
+          <ExecutionFlow
+            spans={detail.spans}
+            selectedId={current?.span_id}
+            onSelect={setSelected}
+          />
           <div className="span-detail">
             <div className="pane-label">SPAN DETAIL</div>
             {current && <SpanInspector key={current.span_id} span={current} />}
@@ -543,12 +627,19 @@ export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [page, setPage] = useState<Page>("health");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [resource, setResource] = useState<{
     projectId: string;
     page: Page;
     value: unknown;
   } | null>(null);
   const [detail, setDetail] = useState<TraceDetail | null>(null);
+  const [selectedSession, setSelectedSession] = useState<SessionSummary | null>(
+    null,
+  );
+  const [sessionRuns, setSessionRuns] = useState<Trace[]>([]);
+  const [sessionLoading, setSessionLoading] = useState(false);
   const [regressionReview, setRegressionReview] =
     useState<RegressionReview | null>(null);
   const [incident, setIncident] = useState<Incident | null>(null);
@@ -586,6 +677,27 @@ export default function Home() {
   useEffect(() => {
     void refreshIdentity();
   }, [refreshIdentity]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [menuOpen]);
+  useEffect(() => {
+    if (!projectId) return;
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      } else if (event.key === "Escape") {
+        setPaletteOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [projectId]);
 
   const refresh = useCallback(async () => {
     if (!projectId) return;
@@ -593,9 +705,24 @@ export default function Home() {
     setError("");
     setResource(null);
     try {
-      const value = await request(
-        `/api/projects/${projectId}/${pagePath[page]}`,
-      );
+      const base = `/api/projects/${projectId}`;
+      const value =
+        page === "health"
+          ? await Promise.all([
+              request<Health>(`${base}/health`),
+              request<Incident[]>(`${base}/incidents`),
+              request<Trace[]>(`${base}/traces`),
+            ]).then(([health, incidents, traces]) => ({
+              ...health,
+              incidents,
+              traces,
+            }))
+          : page === "slos"
+            ? await Promise.all([
+                request<RecordValue[]>(`${base}/slos`),
+                request<Health>(`${base}/health`),
+              ]).then(([policies, health]) => ({ policies, health }))
+            : await request(`${base}/${pagePath[page]}`);
       setResource({ projectId, page, value });
     } catch (e) {
       setError((e as Error).message);
@@ -616,11 +743,49 @@ export default function Home() {
       setError((e as Error).message);
     }
   }
+  async function openSession(session: SessionSummary) {
+    setSelectedSession(session);
+    setSessionRuns([]);
+    setSessionLoading(true);
+    try {
+      const runs = await request<Trace[]>(
+        `/api/projects/${projectId}/traces?session=${encodeURIComponent(session.session_id)}&limit=200`,
+      );
+      setSessionRuns(runs);
+    } catch (e) {
+      setError((e as Error).message);
+      setSelectedSession(null);
+    } finally {
+      setSessionLoading(false);
+    }
+  }
   async function openIncident(id: string) {
     try {
       setIncident(
         await request<Incident>(`/api/projects/${projectId}/incidents/${id}`),
       );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  async function createRegressionFromIncident(item: Incident) {
+    const cluster = item.evidence_json?.cluster as RecordValue | undefined;
+    const representatives = cluster?.representatives as
+      RecordValue[] | undefined;
+    const traceId = representatives?.[0]?.trace_id;
+    if (typeof traceId !== "string") {
+      setError(
+        "This incident has no representative run to mine into a regression case.",
+      );
+      return;
+    }
+    try {
+      const trace = await request<TraceDetail>(
+        `/api/projects/${projectId}/traces/${traceId}`,
+      );
+      setIncident(null);
+      setDetail(trace);
+      await createRegression(trace);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -868,13 +1033,19 @@ export default function Home() {
 
   return (
     <div className="shell">
-      <aside className="sidebar">
+      {menuOpen && (
+        <button
+          className="sidebar-scrim"
+          aria-label="Close navigation"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
+      <aside
+        id="primary-navigation"
+        className={`sidebar ${menuOpen ? "mobile-open" : ""}`}
+      >
         <div className="brand">
-          <BrandMark />
-          <div>
-            <strong>ControlSurface</strong>
-            <small>Production engineering</small>
-          </div>
+          <BrandIdentity />
         </div>
         <div className="project-select">
           <span className="project-avatar">
@@ -888,6 +1059,7 @@ export default function Home() {
               setDataset(null);
               setReleaseEvidence(null);
               setDetail(null);
+              setSelectedSession(null);
               setIncident(null);
             }}
           >
@@ -912,7 +1084,9 @@ export default function Home() {
                     aria-current={page === item.id ? "page" : undefined}
                     onClick={() => {
                       setPage(item.id);
+                      setMenuOpen(false);
                       setDetail(null);
+                      setSelectedSession(null);
                       setIncident(null);
                       setForm("");
                     }}
@@ -937,12 +1111,30 @@ export default function Home() {
       </aside>
       <main className="main">
         <header className="topbar">
+          <button
+            className="icon-button mobile-menu-button"
+            aria-label="Open navigation"
+            aria-expanded={menuOpen}
+            aria-controls="primary-navigation"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <Menu size={18} />
+          </button>
           <div className="breadcrumb">
             {project?.name}
             <ChevronRight size={14} />
             {title}
           </div>
           <div className="top-actions">
+            <button
+              className="command-trigger"
+              aria-label="Open navigation search"
+              onClick={() => setPaletteOpen(true)}
+            >
+              <Search size={14} />
+              <span>Jump to</span>
+              <kbd>Ctrl K</kbd>
+            </button>
             <span className="live-indicator">
               <span />
               Observed data
@@ -986,35 +1178,50 @@ export default function Home() {
                 <div className="skeleton-row" />
               ) : (
                 (() => {
-                  const health = data as Health | null;
+                  const health = data as OverviewData | null;
                   const agents = health?.agents || [];
+                  const incidents = (health?.incidents || []).filter(
+                    (item) => item.status !== "resolved",
+                  );
+                  const recentRuns = (health?.traces || []).slice(0, 6);
+                  const observedRuns = agents.reduce(
+                    (sum, agent) => sum + agent.runs,
+                    0,
+                  );
+                  const failedRuns = agents.reduce(
+                    (sum, agent) => sum + agent.failed_runs,
+                    0,
+                  );
                   return (
                     <>
                       <div className="metric-strip">
                         <div>
-                          <span>Observed agents</span>
-                          <strong>{agents.length}</strong>
-                          <small>Last 24 hours</small>
-                        </div>
-                        <div>
-                          <span>Healthy</span>
+                          <span>Agents healthy</span>
                           <strong>
                             {
                               agents.filter((a) => a.health === "healthy")
                                 .length
                             }
+                            <span className="metric-total">
+                              {" "}
+                              / {agents.length}
+                            </span>
                           </strong>
-                          <small>With passing SLO</small>
+                          <small>Passing active SLOs</small>
                         </div>
                         <div>
-                          <span>Degraded</span>
-                          <strong>
-                            {
-                              agents.filter((a) => a.health === "degraded")
-                                .length
-                            }
-                          </strong>
-                          <small>Active policy breaches</small>
+                          <span>Observed runs</span>
+                          <strong>{observedRuns.toLocaleString()}</strong>
+                          <small>Last {health?.window_hours ?? 24} hours</small>
+                        </div>
+                        <div>
+                          <span>Failed runs</span>
+                          <strong>{failedRuns.toLocaleString()}</strong>
+                          <small>
+                            {observedRuns
+                              ? `${((failedRuns / observedRuns) * 100).toFixed(1)}% of observed runs`
+                              : "No runs observed"}
+                          </small>
                         </div>
                         <div>
                           <span>Open incidents</span>
@@ -1022,62 +1229,172 @@ export default function Home() {
                           <small>Needs investigation</small>
                         </div>
                       </div>
-                      <div className="panel">
+                      <div className="overview-grid">
+                        <div className="panel">
+                          <div className="panel-heading">
+                            <div>
+                              <h2>Agent Health</h2>
+                              <p>
+                                Observed behavior and active SLO classification.
+                              </p>
+                            </div>
+                            <span className="panel-count">
+                              {agents.length} agents
+                            </span>
+                          </div>
+                          {agents.length ? (
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>Agent</th>
+                                  <th>State</th>
+                                  <th>Success</th>
+                                  <th>P95</th>
+                                  <th>Cost/run</th>
+                                  <th>Runs</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {agents.map((agent) => (
+                                  <tr key={agent.agent_name}>
+                                    <td className="strong">
+                                      {agent.agent_name || "Unnamed agent"}
+                                    </td>
+                                    <td>
+                                      <Badge value={agent.health} />
+                                    </td>
+                                    <td>
+                                      {agent.runs
+                                        ? `${(((agent.runs - agent.failed_runs) / agent.runs) * 100).toFixed(1)}%`
+                                        : "—"}
+                                    </td>
+                                    <td>{agent.p95_latency_ms} ms</td>
+                                    <td>
+                                      {usd(
+                                        agent.runs
+                                          ? agent.cost_nano_usd / agent.runs
+                                          : 0,
+                                      )}
+                                    </td>
+                                    <td>{agent.runs}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          ) : (
+                            <Empty
+                              title="No agent runs yet"
+                              description="Create an API key, instrument the Python example and run it to populate production health."
+                              action={
+                                <button
+                                  className="button subtle"
+                                  onClick={() => setPage("keys")}
+                                >
+                                  Set up an API key <ArrowRight size={15} />
+                                </button>
+                              }
+                            />
+                          )}
+                        </div>
+                        <div className="panel">
+                          <div className="panel-heading">
+                            <div>
+                              <h2>Active Incidents</h2>
+                              <p>What needs investigation now.</p>
+                            </div>
+                            <button
+                              className="text-button"
+                              onClick={() => setPage("incidents")}
+                            >
+                              View all
+                            </button>
+                          </div>
+                          {incidents.length ? (
+                            <div className="overview-incidents">
+                              {incidents.slice(0, 4).map((item) => (
+                                <button
+                                  key={item.id}
+                                  onClick={() => void openIncident(item.id)}
+                                >
+                                  <span className="overview-incident-top">
+                                    <span className="mono">
+                                      {short(item.id, 12)}
+                                    </span>
+                                    <Badge value={item.severity} />
+                                  </span>
+                                  <strong>{item.title}</strong>
+                                  <span>
+                                    {item.affected_runs.toLocaleString()}{" "}
+                                    affected runs · {date(item.created_at)}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <Empty
+                              title="No active incidents"
+                              description="New incidents appear here when failed runs are grouped and investigated."
+                            />
+                          )}
+                        </div>
+                      </div>
+                      <div className="panel overview-runs">
                         <div className="panel-heading">
                           <div>
-                            <h2>Agent status</h2>
+                            <h2>Recent Agent Runs</h2>
                             <p>
-                              Measured from real traces; configure an SLO to
-                              classify health.
+                              Representative activity from the latest traces.
                             </p>
                           </div>
-                          <span className="panel-count">
-                            {agents.length} agents
-                          </span>
+                          <button
+                            className="text-button"
+                            onClick={() => setPage("traces")}
+                          >
+                            View traces
+                          </button>
                         </div>
-                        {agents.length ? (
+                        {recentRuns.length ? (
                           <table>
                             <thead>
                               <tr>
+                                <th>Run</th>
                                 <th>Agent</th>
-                                <th>State</th>
-                                <th>Runs</th>
-                                <th>Failures</th>
-                                <th>P95 latency</th>
+                                <th>Status</th>
+                                <th>Duration</th>
+                                <th>Steps</th>
                                 <th>Cost</th>
-                                <th>Last seen</th>
+                                <th>Started</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {agents.map((agent) => (
-                                <tr key={agent.agent_name}>
-                                  <td className="strong">
-                                    {agent.agent_name || "Unnamed agent"}
-                                  </td>
+                              {recentRuns.map((trace) => (
+                                <tr key={trace.trace_id}>
                                   <td>
-                                    <Badge value={agent.health} />
+                                    <button
+                                      className="text-button row-link strong"
+                                      onClick={() =>
+                                        void openTrace(trace.trace_id)
+                                      }
+                                    >
+                                      {trace.root_name}
+                                    </button>
                                   </td>
-                                  <td>{agent.runs}</td>
-                                  <td>{agent.failed_runs}</td>
-                                  <td>{agent.p95_latency_ms} ms</td>
-                                  <td>{usd(agent.cost_nano_usd)}</td>
-                                  <td>{date(agent.last_seen)}</td>
+                                  <td>{trace.agent_name || "—"}</td>
+                                  <td>
+                                    <Badge value={trace.status} />
+                                  </td>
+                                  <td>{trace.duration_ms} ms</td>
+                                  <td>{trace.span_count}</td>
+                                  <td>{usd(trace.cost_nano_usd)}</td>
+                                  <td>{date(trace.start_time)}</td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                         ) : (
                           <Empty
-                            title="No agent runs yet"
-                            description="Create an API key, instrument the Python example and run it to populate production health."
-                            action={
-                              <button
-                                className="button subtle"
-                                onClick={() => setPage("keys")}
-                              >
-                                Set up an API key <ArrowRight size={15} />
-                              </button>
-                            }
+                            title="No recent runs"
+                            description="Instrument an agent to see production activity here."
                           />
                         )}
                       </div>
@@ -1187,27 +1504,36 @@ export default function Home() {
               <div className="panel table-panel">
                 {loading ? (
                   <div className="skeleton-row" />
-                ) : (data as RecordValue[] | null)?.length ? (
+                ) : (data as SessionSummary[] | null)?.length ? (
                   <table>
                     <thead>
                       <tr>
                         <th>Session</th>
-                        <th>Traces</th>
+                        <th>Runs</th>
                         <th>Errors</th>
                         <th>Cost</th>
                         <th>Last seen</th>
+                        <th />
                       </tr>
                     </thead>
                     <tbody>
-                      {(data as RecordValue[]).map((s, i) => (
-                        <tr key={i}>
-                          <td className="mono">
-                            {short(String(s.session_id), 24)}
+                      {(data as SessionSummary[]).map((s) => (
+                        <tr key={s.session_id}>
+                          <td>
+                            <button
+                              className="text-button row-link mono"
+                              onClick={() => void openSession(s)}
+                            >
+                              {short(s.session_id, 24)}
+                            </button>
                           </td>
-                          <td>{String(s.trace_count)}</td>
-                          <td>{String(s.errors)}</td>
-                          <td>{usd(Number(s.cost_nano_usd))}</td>
-                          <td>{date(String(s.last_seen))}</td>
+                          <td>{s.trace_count}</td>
+                          <td>{s.errors}</td>
+                          <td>{usd(s.cost_nano_usd)}</td>
+                          <td>{date(s.last_seen)}</td>
+                          <td>
+                            <ChevronRight size={15} />
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1228,6 +1554,9 @@ export default function Home() {
                 title="Failure clusters"
                 description="Deterministic grouping by execution structure, tool sequence and error evidence."
               />
+              {!loading && Boolean((data as Cluster[] | null)?.length) && (
+                <ClusterDistribution clusters={data as Cluster[]} />
+              )}
               <div className="stack">
                 {loading ? (
                   <div className="skeleton-row" />
@@ -1542,7 +1871,7 @@ export default function Home() {
             <>
               <SectionHeading
                 eyebrow="SHIP / DECISIONS"
-                title="Release evidence"
+                title="Release Gates"
                 description="Frozen gate inputs, results and reasons produced by the CLI."
               />
               <div className="panel table-panel">
@@ -1554,6 +1883,7 @@ export default function Home() {
                       <tr>
                         <th>Decision</th>
                         <th>Candidate</th>
+                        <th>Baseline</th>
                         <th>Reasons</th>
                         <th>Evidence hash</th>
                         <th>Created</th>
@@ -1572,13 +1902,22 @@ export default function Home() {
                             </td>
                             <td>
                               <button
-                                className="text-button row-link strong"
+                                className="text-button row-link strong release-version"
+                                title={String(manifest.candidate_version)}
                                 onClick={() =>
                                   void openReleaseEvidence(String(item.id))
                                 }
                               >
                                 {String(manifest.candidate_version)}
                               </button>
+                            </td>
+                            <td className="mono muted">
+                              <span
+                                className="release-version"
+                                title={String(manifest.baseline_version)}
+                              >
+                                {String(manifest.baseline_version)}
+                              </span>
                             </td>
                             <td>
                               {Array.isArray(decision.reasons)
@@ -1606,9 +1945,9 @@ export default function Home() {
           {page === "slos" && (
             <>
               <SectionHeading
-                eyebrow="SETTINGS / RELIABILITY"
-                title="SLO policies"
-                description="Per-agent thresholds determine whether production health is healthy or degraded."
+                eyebrow="MONITOR / LAST 24 HOURS"
+                title="SLOs"
+                description="Current reliability against each agent's configured production target."
                 action={
                   <button
                     className="button primary"
@@ -1618,48 +1957,98 @@ export default function Home() {
                   </button>
                 }
               />
-              <div className="panel table-panel">
+              <div className="panel table-panel slo-table">
                 {loading ? (
                   <div className="skeleton-row" />
-                ) : (data as RecordValue[] | null)?.length ? (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Agent</th>
-                        <th>Completion min</th>
-                        <th>Tool success min</th>
-                        <th>P95 max</th>
-                        <th>Min samples</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data as RecordValue[]).map((s, i) => {
-                        const p = s.policy_json as RecordValue;
-                        return (
-                          <tr key={i}>
-                            <td className="strong">{String(s.agent_name)}</td>
-                            <td>
-                              {(Number(p.completion_rate_min) * 100).toFixed(1)}
-                              %
-                            </td>
-                            <td>
-                              {(Number(p.tool_success_rate_min) * 100).toFixed(
-                                1,
-                              )}
-                              %
-                            </td>
-                            <td>{String(p.p95_latency_ms_max)} ms</td>
-                            <td>{String(p.minimum_samples)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
                 ) : (
-                  <Empty
-                    title="No SLO policies"
-                    description="Define agent reliability targets to classify real production health."
-                  />
+                  (() => {
+                    const view = data as SloViewData | null;
+                    const policies = view?.policies || [];
+                    return policies.length ? (
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Agent</th>
+                            <th>Completion</th>
+                            <th>Tool success</th>
+                            <th>P95 latency</th>
+                            <th>Samples</th>
+                            <th>Health</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {policies.map((item) => {
+                            const policy = item.policy_json as RecordValue;
+                            const observed = view?.health.agents.find(
+                              (agent) => agent.agent_name === item.agent_name,
+                            );
+                            return (
+                              <tr key={String(item.agent_name)}>
+                                <td className="strong">
+                                  {String(item.agent_name)}
+                                </td>
+                                <td className="slo-measure">
+                                  <strong>
+                                    {observed
+                                      ? `${(observed.completion_rate * 100).toFixed(1)}%`
+                                      : "—"}
+                                  </strong>
+                                  <small>
+                                    Target ≥{" "}
+                                    {(
+                                      Number(policy.completion_rate_min) * 100
+                                    ).toFixed(1)}
+                                    %
+                                  </small>
+                                </td>
+                                <td className="slo-measure">
+                                  <strong>
+                                    {observed?.tool_success_rate == null
+                                      ? "—"
+                                      : `${(observed.tool_success_rate * 100).toFixed(1)}%`}
+                                  </strong>
+                                  <small>
+                                    Target ≥{" "}
+                                    {(
+                                      Number(policy.tool_success_rate_min) * 100
+                                    ).toFixed(1)}
+                                    %
+                                  </small>
+                                </td>
+                                <td className="slo-measure">
+                                  <strong>
+                                    {observed
+                                      ? `${observed.p95_latency_ms} ms`
+                                      : "—"}
+                                  </strong>
+                                  <small>
+                                    Target ≤ {String(policy.p95_latency_ms_max)}{" "}
+                                    ms
+                                  </small>
+                                </td>
+                                <td className="slo-measure">
+                                  <strong>{observed?.runs ?? 0}</strong>
+                                  <small>
+                                    Minimum {String(policy.minimum_samples)}
+                                  </small>
+                                </td>
+                                <td>
+                                  <Badge
+                                    value={observed?.health || "no-data"}
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <Empty
+                        title="No SLO policies"
+                        description="Define agent reliability targets to classify real production health."
+                      />
+                    );
+                  })()
                 )}
               </div>
             </>
@@ -1757,6 +2146,38 @@ export default function Home() {
           )}
         </div>
       </main>
+      {paletteOpen && (
+        <CommandPalette
+          destinations={navigation.flatMap((group) =>
+            group.items.map((item) => ({
+              id: item.id,
+              label: item.label,
+              section: group.label,
+            })),
+          )}
+          onSelect={(id) => {
+            setPage(id as Page);
+            setPaletteOpen(false);
+            setMenuOpen(false);
+            setDetail(null);
+            setIncident(null);
+            setSelectedSession(null);
+          }}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
+      {selectedSession && (
+        <SessionPanel
+          session={selectedSession}
+          runs={sessionRuns}
+          loading={sessionLoading}
+          onClose={() => setSelectedSession(null)}
+          onOpenTrace={(traceId) => {
+            setSelectedSession(null);
+            void openTrace(traceId);
+          }}
+        />
+      )}
       {detail && (
         <SpanTree
           detail={detail}
@@ -1797,10 +2218,33 @@ export default function Home() {
               <div className="detail-meta">
                 <Badge value={incident.severity} />
                 <Badge value={incident.status} />
-                <span>{incident.affected_runs} affected runs</span>
+                {incident.agent_name && <span>{incident.agent_name}</span>}
               </div>
             </div>
             <div className="incident-content">
+              <div className="incident-impact">
+                <div>
+                  <span>Affected runs</span>
+                  <strong>{incident.affected_runs.toLocaleString()}</strong>
+                </div>
+                <div>
+                  <span>First observed</span>
+                  <strong>{date(incident.first_seen)}</strong>
+                </div>
+                <div>
+                  <span>Latest observed</span>
+                  <strong>{date(incident.last_seen)}</strong>
+                </div>
+              </div>
+              <div className="incident-cluster-summary">
+                <span className="eyebrow">DOMINANT FAILURE CLUSTER</span>
+                <strong className="mono">
+                  {short(incident.cluster_signature, 24)}
+                </strong>
+                <span>
+                  Representative runs below provide the raw execution evidence.
+                </span>
+              </div>
               <h3>Evidence-ranked change candidates</h3>
               <p className="muted">
                 Associations are not causal proof. Inspect versions and
@@ -1823,6 +2267,9 @@ export default function Home() {
                       {String(c.after_version || "—")} ·{" "}
                       {String(c.minutes_before_first_failure)} min before first
                       failure
+                    </p>
+                    <p>
+                      {String(c.explanation || "Temporal association only")}
                     </p>
                   </div>
                 ))
@@ -1848,6 +2295,58 @@ export default function Home() {
                   {String(r.trace_id)} <ArrowRight size={15} />
                 </button>
               ))}
+              {(
+                ((incident.evidence_json?.cluster as RecordValue)
+                  ?.representatives as RecordValue[]) || []
+              ).length > 0 && (
+                <button
+                  className="button primary incident-regression-action"
+                  onClick={() => void createRegressionFromIncident(incident)}
+                >
+                  Create regression case <ArrowRight size={15} />
+                </button>
+              )}
+              <h3 className="incident-timeline-title">Incident timeline</h3>
+              <div className="incident-timeline">
+                {[
+                  ...(
+                    (incident.evidence_json?.root_cause_candidates ||
+                      []) as RecordValue[]
+                  )
+                    .slice(0, 1)
+                    .filter(
+                      (candidate) => typeof candidate.effective_at === "string",
+                    )
+                    .map((candidate) => ({
+                      at: String(candidate.effective_at),
+                      label: `${String(candidate.subject)} change recorded`,
+                    })),
+                  ...(incident.first_seen
+                    ? [
+                        {
+                          at: incident.first_seen,
+                          label: "Failure cluster first observed",
+                        },
+                      ]
+                    : []),
+                  { at: incident.created_at, label: "Incident opened" },
+                  ...(incident.last_seen
+                    ? [
+                        {
+                          at: incident.last_seen,
+                          label: "Latest affected run observed",
+                        },
+                      ]
+                    : []),
+                ]
+                  .sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
+                  .map((event, index) => (
+                    <div key={`${event.label}-${index}`}>
+                      <time dateTime={event.at}>{date(event.at)}</time>
+                      <span>{event.label}</span>
+                    </div>
+                  ))}
+              </div>
             </div>
           </div>
         </div>
