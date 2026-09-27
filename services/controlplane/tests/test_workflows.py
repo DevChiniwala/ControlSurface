@@ -45,7 +45,7 @@ def test_regression_candidate_requires_review_and_preserves_source(monkeypatch):
     monkeypatch.setattr(workflows, "_clusters", lambda *_: [cluster])
     monkeypatch.setattr(
         workflows,
-        "trace_detail",
+        "_trace_detail",
         lambda *_: {
             "spans": [{"attributes": {"controlsurface.input": "I was charged twice"}}],
             "graph": {"outcome": "error"},

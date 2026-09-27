@@ -2050,6 +2050,18 @@ label input::placeholder {
   width: 31px;
   height: 29px;
 }
+.boot-error {
+  flex-direction: column;
+  padding: 24px;
+  text-align: center;
+}
+.boot-error strong {
+  color: var(--text);
+  font-size: 17px;
+}
+.boot-error span {
+  max-width: 440px;
+}
 @media (max-width: 1050px) {
   .sidebar {
     width: 216px;

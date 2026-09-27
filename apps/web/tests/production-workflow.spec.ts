@@ -38,6 +38,7 @@ test("production health to incident evidence, run, dataset, and release decision
     page.getByRole("heading", { name: "Incidents", exact: true }),
   ).toBeVisible();
   await page.locator(".table-panel tbody button").first().click();
+  await expect(page).toHaveURL(/\/incidents\/[0-9a-f-]+$/);
   await expect(
     page.getByText("Evidence-ranked change candidates"),
   ).toBeVisible();
@@ -51,6 +52,7 @@ test("production health to incident evidence, run, dataset, and release decision
   await expect(review.getByLabel("Input JSON")).not.toBeEmpty();
   await review.getByRole("button", { name: "Close regression review" }).click();
   await expect(page.locator(".trace-tree")).toBeVisible();
+  await expect(page).toHaveURL(/\/traces\/[0-9a-f]{32}$/);
   const execution = page.getByRole("region", { name: "Agent execution flow" });
   await expect(execution).toBeVisible();
   await execution.getByRole("button", { name: "Timeline" }).click();
@@ -58,6 +60,7 @@ test("production health to incident evidence, run, dataset, and release decision
   await execution.getByRole("button", { name: "Transcript" }).click();
   await page.screenshot({ path: testInfo.outputPath("agent-execution.png") });
   await page.getByRole("button", { name: "Close trace" }).click();
+  await expect(page).toHaveURL(/\/traces$/);
 
   await navigation
     .getByRole("button", { name: "Datasets", exact: true })
@@ -88,6 +91,7 @@ test("production health to incident evidence, run, dataset, and release decision
     page.getByRole("heading", { name: "Release Gates" }),
   ).toBeVisible();
   await page.locator(".table-panel tbody button").first().click();
+  await expect(page).toHaveURL(/\/releases\/[0-9a-f-]+$/);
   const evidence = page.getByRole("dialog", { name: /refund-agent@/ });
   await expect(evidence.locator(".gate-decision")).toBeVisible();
   await expect(evidence.getByText("CONTENT SHA-256")).toBeVisible();
@@ -96,6 +100,7 @@ test("production health to incident evidence, run, dataset, and release decision
   await evidence
     .getByRole("button", { name: "Close release evidence" })
     .click();
+  await expect(page).toHaveURL(/\/releases$/);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page
@@ -176,8 +181,27 @@ test("production health to incident evidence, run, dataset, and release decision
         "Target",
       );
     }
+    if (navigationLabel === "API Keys") {
+      await page.getByRole("button", { name: "Create key" }).click();
+      const keyDialog = page.getByRole("dialog", { name: "Create key" });
+      await expect(
+        keyDialog.getByRole("button", { name: "Close" }),
+      ).toBeFocused();
+      await keyDialog.getByLabel("Key label").fill("Browser workflow key");
+      await keyDialog.getByRole("button", { name: "Close" }).click();
+      await expect(keyDialog).toBeHidden();
+    }
   }
-  await page.keyboard.press("Control+k");
+  await page.evaluate(() => {
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "k",
+        code: "KeyK",
+        ctrlKey: true,
+        bubbles: true,
+      }),
+    );
+  });
   const palette = page.getByRole("dialog", { name: "Navigate ControlSurface" });
   await expect(palette).toBeVisible();
   await palette.getByRole("textbox", { name: "Find a view" }).fill("SLOs");

@@ -43,9 +43,47 @@ def test_otlp_protobuf_contract_and_redaction():
     assert attributes[0]["value"]["string_value"] == "[REDACTED]"
 
 
+def test_redacts_cookie_attributes_and_url_query_secrets():
+    request = sample_request()
+    span = request.resource_spans[0].scope_spans[0].spans[0]
+    cookie = span.attributes.add()
+    cookie.key = "http.request.header.cookie"
+    cookie.value.string_value = "session=private"
+    url = span.attributes.add()
+    url.key = "url.full"
+    url.value.string_value = "https://example.invalid/callback?token=private&mode=safe"
+    payload = sanitized_payload(request).decode()
+    assert "session=private" not in payload
+    assert "token=private" not in payload
+    assert "token=[REDACTED]" in payload
+
+
 def test_otlp_rejects_malformed_protobuf():
     with pytest.raises(BatchRejected):
         parse_http_body(b"\xff\x80\xff", "application/x-protobuf")
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("trace_id", b"short", "invalid trace or span identifier"),
+        ("span_id", b"short", "invalid trace or span identifier"),
+        ("parent_span_id", b"short", "invalid parent span identifier"),
+    ],
+)
+def test_otlp_rejects_invalid_identifiers(field: str, value: bytes, message: str):
+    request = sample_request()
+    setattr(request.resource_spans[0].scope_spans[0].spans[0], field, value)
+    with pytest.raises(BatchRejected, match=message):
+        sanitized_payload(request)
+
+
+def test_otlp_rejects_negative_duration():
+    request = sample_request()
+    span = request.resource_spans[0].scope_spans[0].spans[0]
+    span.end_time_unix_nano = span.start_time_unix_nano - 1
+    with pytest.raises(BatchRejected, match="end time"):
+        sanitized_payload(request)
 
 
 def test_flattened_span_preserves_resource_and_usage():

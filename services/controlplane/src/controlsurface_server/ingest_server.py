@@ -56,6 +56,7 @@ async def _limited_body(request: Request, settings: Settings) -> bytes:
             raise BatchRejected("Invalid gzip payload") from error
         if (
             decoder.unconsumed_tail
+            or decoder.unused_data
             or len(body) > settings.max_uncompressed_bytes
             or not decoder.eof
         ):
@@ -99,6 +100,17 @@ def live() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/health/ready")
+def ready() -> dict[str, str]:
+    settings = load_settings()
+    try:
+        with postgres(settings) as connection:
+            connection.execute("SELECT 1")
+    except (psycopg.Error, PoolTimeout) as error:
+        raise HTTPException(503, "Telemetry inbox unavailable") from error
+    return {"status": "ok"}
+
+
 class TraceService(trace_service_pb2_grpc.TraceServiceServicer):
     async def Export(self, request, context):  # type: ignore[no-untyped-def]
         settings = load_settings()
@@ -127,9 +139,17 @@ async def main() -> None:
         options=[("grpc.max_receive_message_length", settings.max_request_bytes)]
     )
     trace_service_pb2_grpc.add_TraceServiceServicer_to_server(TraceService(), grpc_server)
+    # The container listens on all interfaces; Compose publishes this on host loopback only.
     grpc_server.add_insecure_port("0.0.0.0:4317")
     await grpc_server.start()
-    http_server = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=4318, log_level="info"))
+    http_server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host="0.0.0.0",  # nosec B104
+            port=4318,
+            log_level="info",
+        )
+    )
     try:
         await http_server.serve()
     finally:

@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from agent import (
     SCHEMA_V1,
@@ -25,6 +26,23 @@ from controlsurface import ControlSurface
 def api(path: str, method: str = "GET", body: dict[str, Any] | None = None) -> Any:
     project = os.environ["CONTROLSURFACE_PROJECT_ID"]
     url = os.getenv("CONTROLSURFACE_API_URL", "http://localhost:8000").rstrip("/")
+    try:
+        parsed = urlsplit(url)
+        valid = (
+            parsed.scheme in {"http", "https"}
+            and parsed.hostname is not None
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.query
+            and not parsed.fragment
+        )
+        _ = parsed.port
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ValueError(
+            "CONTROLSURFACE_API_URL must be an HTTP(S) URL without credentials"
+        )
     request = urllib.request.Request(
         f"{url}/api/projects/{project}/{path}",
         data=json.dumps(body).encode() if body is not None else None,
@@ -34,7 +52,8 @@ def api(path: str, method: str = "GET", body: dict[str, Any] | None = None) -> A
         },
         method=method,
     )
-    with urllib.request.urlopen(request, timeout=15) as response:
+    # The configured base is parsed and restricted to HTTP(S) above.
+    with urllib.request.urlopen(request, timeout=15) as response:  # nosec B310
         return json.load(response)
 
 

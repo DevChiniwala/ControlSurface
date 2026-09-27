@@ -13,13 +13,25 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
 
-from .api import _authorized_project, _query, trace_detail
+from .dependencies import advisory_lock_key
+from .dependencies import authorized_project as _authorized_project
+from .dependencies import query_clickhouse as _query
 from .domain.changes import canonical_json
 from .domain.release import CaseResult, GatePolicy, release_evidence
 from .settings import Settings, load_settings
 from .storage import postgres
 
 router = APIRouter(prefix="/api/projects/{project_id}")
+
+
+def _trace_detail(
+    project_id: uuid.UUID, trace_id: str, authorized: str, settings: Settings
+) -> dict[str, Any]:
+    # Lazy import keeps route modules independently importable while reusing the
+    # same trace reader. API imports this router only after defining the reader.
+    from .api import trace_detail
+
+    return trace_detail(project_id, trace_id, authorized, settings)
 
 
 class AnalyzeInput(BaseModel):
@@ -45,8 +57,8 @@ class DatasetItemInput(BaseModel):
 
 
 class ReleaseInput(BaseModel):
-    baseline: list[CaseResult]
-    candidate: list[CaseResult]
+    baseline: list[CaseResult] = Field(max_length=5000)
+    candidate: list[CaseResult] = Field(max_length=5000)
     policy: GatePolicy
     manifest: dict[str, Any]
 
@@ -123,7 +135,7 @@ def analyze_incident(
         raise HTTPException(404, "Failure cluster not found")
     failed_tool = str(cluster["features"].get("failed_tool") or "")
     representative = cluster["representatives"][0]["trace_id"]
-    detail = trace_detail(project_id, representative, str(project_id), settings)
+    detail = _trace_detail(project_id, representative, str(project_id), settings)
     agent_name = next(
         (
             str(span["attributes"]["controlsurface.agent.name"])
@@ -139,6 +151,10 @@ def analyze_incident(
     if last_seen.tzinfo is None:
         last_seen = last_seen.replace(tzinfo=UTC)
     with postgres(settings) as connection:
+        connection.execute(
+            "SELECT pg_advisory_xact_lock(%s)",
+            (advisory_lock_key("incident-cluster", project_id, data.cluster_signature),),
+        )
         previous = connection.execute(
             "SELECT id, agent_name FROM incidents WHERE project_id = %s AND cluster_signature = %s "
             "AND status = 'open' ORDER BY created_at DESC LIMIT 1",
@@ -265,7 +281,7 @@ def regression_candidates(
     candidates = []
     for representative in cluster["representatives"]:
         trace_id = representative["trace_id"]
-        detail = trace_detail(project_id, trace_id, str(project_id), settings)
+        detail = _trace_detail(project_id, trace_id, str(project_id), settings)
         source = next(
             (span for span in detail["spans"] if "controlsurface.input" in span["attributes"]),
             None,
@@ -311,7 +327,7 @@ def create_regression(
     _: str = Depends(_authorized_project),
     settings: Settings = Depends(load_settings),
 ) -> dict[str, str]:
-    detail = trace_detail(project_id, data.source_trace_id, str(project_id), settings)
+    detail = _trace_detail(project_id, data.source_trace_id, str(project_id), settings)
     if (
         data.cluster_signature
         and (detail["features"] or {}).get("failure_signature") != data.cluster_signature
@@ -350,6 +366,18 @@ def create_regression(
     revision = hashlib.sha256(canonical_json(case).encode()).hexdigest()
     case_id = uuid.uuid4()
     with postgres(settings) as connection:
+        lock_keys = {advisory_lock_key("regression-source", project_id, data.source_trace_id)}
+        if data.cluster_signature:
+            lock_keys.add(
+                advisory_lock_key(
+                    "regression-equivalent",
+                    project_id,
+                    data.cluster_signature,
+                    canonical_json(data.input),
+                )
+            )
+        for lock_key in sorted(lock_keys):
+            connection.execute("SELECT pg_advisory_xact_lock(%s)", (lock_key,))
         existing = connection.execute(
             "SELECT id, revision FROM regression_cases WHERE project_id = %s "
             "AND source_trace_id = %s",
@@ -434,6 +462,10 @@ def create_dataset(
 ) -> dict[str, str]:
     dataset_id = uuid.uuid4()
     with postgres(settings) as connection:
+        connection.execute(
+            "SELECT pg_advisory_xact_lock(%s)",
+            (advisory_lock_key("dataset-name", project_id, data.name),),
+        )
         if connection.execute(
             "SELECT 1 FROM datasets WHERE project_id = %s AND name = %s",
             (project_id, data.name),

@@ -30,7 +30,8 @@ class FailureCluster:
 def failure_signature(run: FailedRun) -> tuple[str, dict[str, object]]:
     features = graph_features(run.graph)
     structural = {
-        "tool_sequence": features["tool_sequence"],
+        "tool_sequence": features["tool_sequence"][:64],
+        "tool_count_bucket": min(int(features["tool_count"]), 64),
         "retry_count": min(int(features["retry_count"]), 3),
         "consecutive_tool_repeats": min(int(features["consecutive_tool_repeats"]), 3),
         "subagent_count": min(int(features["subagent_count"]), 3),

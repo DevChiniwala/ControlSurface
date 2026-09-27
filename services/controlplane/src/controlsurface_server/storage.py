@@ -51,6 +51,18 @@ def clickhouse(settings: Settings) -> Client:
     )
 
 
+def configure_trace_retention(client: Client, days: int) -> None:
+    """Apply one explicit TTL to raw and derived telemetry projections."""
+    if not 1 <= days <= 3650:
+        raise ValueError("Trace retention must be between 1 and 3650 days")
+    for table, timestamp in (
+        ("spans", "start_time"),
+        ("trace_summaries", "start_time"),
+        ("agent_run_graphs", "occurred_at"),
+    ):
+        client.command(f"ALTER TABLE {table} MODIFY TTL {timestamp} + INTERVAL {days} DAY DELETE")
+
+
 def apply_migrations(settings: Settings) -> None:
     root = (
         Path(os.environ["CS_MIGRATIONS_DIR"])
@@ -86,5 +98,7 @@ def apply_migrations(settings: Settings) -> None:
                 client.command(path.read_text(encoding="utf-8"))
                 connection.execute("INSERT INTO schema_migrations(version) VALUES (%s)", (version,))
                 connection.commit()
+        if settings.trace_retention_days is not None:
+            configure_trace_retention(client, settings.trace_retention_days)
     finally:
         client.close()

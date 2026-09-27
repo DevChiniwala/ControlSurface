@@ -2,7 +2,25 @@ import argparse
 import json
 from pathlib import Path
 
-from controlsurface.cli import _evaluate_case, eval_run
+import pytest
+
+from controlsurface.cli import _api_base, _evaluate_case, eval_run
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "file:///tmp/controlsurface",
+        "http://",
+        "http://user:password@localhost:8000",
+        "http://localhost:8000?token=secret",
+        "http://localhost:invalid",
+    ],
+)
+def test_api_base_rejects_non_http_or_secret_bearing_urls(monkeypatch, value):
+    monkeypatch.setenv("CONTROLSURFACE_API_URL", value)
+    with pytest.raises(ValueError, match=r"HTTP\(S\) URL"):
+        _api_base()
 
 
 def test_deterministic_assertions():
@@ -60,3 +78,26 @@ def test_local_runner_isolates_failing_case(tmp_path, monkeypatch):
     assert results[0]["passed"]
     assert not results[1]["passed"]
     assert "Unknown scenario" in results[1]["error"]
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        {},
+        {"id": "", "input": {}, "expected": {}},
+        {"id": "case", "input": "not-an-object", "expected": {}},
+        {"id": "case", "input": {}, "expected": []},
+    ],
+)
+def test_local_runner_rejects_malformed_suite_cases(tmp_path, case):
+    suite = tmp_path / "suite.json"
+    suite.write_text(json.dumps({"cases": [case]}), encoding="utf-8")
+    args = argparse.Namespace(
+        suite=str(suite),
+        candidate="fixture_candidate:refund_candidate",
+        evaluator=None,
+        timeout=5,
+        out=str(tmp_path / "results.json"),
+    )
+    with pytest.raises(ValueError, match="Suite case"):
+        eval_run(args)

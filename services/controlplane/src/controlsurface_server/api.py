@@ -10,35 +10,66 @@ from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
+import psycopg
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
+from pydantic import AwareDatetime, BaseModel, Field
 
 from .auth import (
     LoginRateLimiter,
-    browser_user,
     create_api_key,
     create_browser_session,
     create_owner,
     csrf_token,
-    project_for_api_key,
     verify_password,
 )
+from .dependencies import actor as _actor
+from .dependencies import advisory_lock_key
+from .dependencies import authorized_project as _authorized_project
+from .dependencies import query_clickhouse as _query
+from .dependencies import settings_dependency as _settings
 from .domain.changes import compare_contracts, fingerprint
 from .domain.slo import SloMetrics, SloPolicy, evaluate_slo_metrics
-from .settings import Settings, load_settings
-from .storage import clickhouse, postgres
+from .settings import Settings
+from .storage import postgres
+
+_cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CS_CORS_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
+if not _cors_origins or "*" in _cors_origins:
+    raise RuntimeError("CS_CORS_ORIGINS must contain explicit browser origins")
 
 app = FastAPI(title="ControlSurface API", version="0.1.0")
 _login_attempts = LoginRateLimiter()
+_MAX_CONTROL_REQUEST_BYTES = 2 * 1024 * 1024
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CS_CORS_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type", "Authorization", "X-Bootstrap-Token", "X-CSRF-Token"],
 )
+
+
+@app.middleware("http")
+async def limit_control_request_body(request: Request, call_next):  # type: ignore[no-untyped-def]
+    """Bound JSON control-plane requests even without a reverse proxy."""
+    if request.method in {"POST", "PUT", "PATCH"}:
+        raw_length = request.headers.get("content-length")
+        if raw_length:
+            try:
+                if int(raw_length) > _MAX_CONTROL_REQUEST_BYTES:
+                    return JSONResponse({"detail": "Request body too large"}, status_code=413)
+            except ValueError:
+                return JSONResponse({"detail": "Invalid Content-Length"}, status_code=400)
+        body = await request.body()
+        if len(body) > _MAX_CONTROL_REQUEST_BYTES:
+            return JSONResponse({"detail": "Request body too large"}, status_code=413)
+    return await call_next(request)
 
 
 class SetupInput(BaseModel):
@@ -48,8 +79,8 @@ class SetupInput(BaseModel):
 
 
 class LoginInput(BaseModel):
-    email: str
-    password: str
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=1024)
 
 
 class ProjectInput(BaseModel):
@@ -65,13 +96,13 @@ class ChangeInput(BaseModel):
     change_type: str = Field(min_length=1, max_length=64)
     subject_type: str = Field(min_length=1, max_length=64)
     subject_name: str = Field(min_length=1, max_length=200)
-    before_version: str | None = None
-    after_version: str | None = None
-    before_hash: str | None = None
-    after_hash: str | None = None
-    deployment_id: str | None = None
-    environment: str = "production"
-    effective_at: datetime
+    before_version: str | None = Field(default=None, max_length=200)
+    after_version: str | None = Field(default=None, max_length=200)
+    before_hash: str | None = Field(default=None, max_length=256)
+    after_hash: str | None = Field(default=None, max_length=256)
+    deployment_id: str | None = Field(default=None, max_length=200)
+    environment: str = Field(default="production", min_length=1, max_length=100)
+    effective_at: AwareDatetime
     details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -79,63 +110,12 @@ class ToolSchemaInput(BaseModel):
     tool_name: str = Field(min_length=1, max_length=200)
     version: str = Field(min_length=1, max_length=100)
     schema_data: dict[str, Any] = Field(alias="schema_json")
-    environment: str = "production"
+    environment: str = Field(default="production", min_length=1, max_length=100)
 
 
 class SloInput(BaseModel):
     agent_name: str = Field(min_length=1, max_length=200)
     policy: SloPolicy
-
-
-def _settings() -> Settings:
-    return load_settings()
-
-
-def _actor(request: Request, settings: Settings = Depends(_settings)) -> tuple[str, str]:
-    token = request.cookies.get("cs_session")
-    authorization = request.headers.get("authorization", "")
-    with postgres(settings) as connection:
-        if authorization.lower().startswith("bearer "):
-            project_id = project_for_api_key(connection, authorization[7:].strip())
-            if project_id:
-                return "key", project_id
-            raise HTTPException(401, "Authentication required")
-        user_id = browser_user(connection, token)
-        if user_id and token:
-            if request.method not in {"GET", "HEAD", "OPTIONS"}:
-                provided = request.headers.get("x-csrf-token", "")
-                if not provided or not hmac.compare_digest(provided, csrf_token(token)):
-                    raise HTTPException(403, "Invalid CSRF token")
-            return "user", user_id
-    raise HTTPException(401, "Authentication required")
-
-
-def _authorized_project(
-    project_id: uuid.UUID,
-    actor: tuple[str, str] = Depends(_actor),
-    settings: Settings = Depends(_settings),
-) -> str:
-    if actor[0] == "key":
-        if actor[1] != str(project_id):
-            raise HTTPException(404, "Project not found")
-        return str(project_id)
-    with postgres(settings) as connection:
-        row = connection.execute(
-            "SELECT 1 FROM projects WHERE id = %s AND owner_id = %s",
-            (project_id, actor[1]),
-        ).fetchone()
-    if not row:
-        raise HTTPException(404, "Project not found")
-    return str(project_id)
-
-
-def _query(settings: Settings, sql: str, parameters: dict[str, Any]) -> list[dict[str, Any]]:
-    client = clickhouse(settings)
-    try:
-        result = client.query(sql, parameters=parameters)
-        return [dict(zip(result.column_names, row, strict=True)) for row in result.result_rows]
-    finally:
-        client.close()
 
 
 @app.get("/health/live")
@@ -287,7 +267,7 @@ def create_project(
                 "INSERT INTO projects(id, name, slug, owner_id) VALUES (%s, %s, %s, %s)",
                 (project_id, data.name, data.slug, actor[1]),
             )
-        except Exception as error:
+        except psycopg.errors.UniqueViolation as error:
             raise HTTPException(409, "Project slug unavailable") from error
     return {"id": str(project_id)}
 
@@ -393,14 +373,16 @@ def trace_detail(
         "SELECT span_id, parent_span_id, name, start_ns, end_ns, status, operation, "
         "session_id, agent_name, agent_version, tool_name, model_name, input_tokens, "
         "output_tokens, cost_nano_usd, resource_json, scope_json, attributes_json, "
-        "events_json, links_json FROM spans FINAL "
+        "events_json, links_json, count() OVER () AS total_span_count FROM spans FINAL "
         "WHERE project_id = {project_id:UUID} AND trace_id = {trace_id:String} "
-        "ORDER BY start_ns LIMIT 2000",
+        "ORDER BY start_ns LIMIT 10000",
         {"project_id": str(project_id), "trace_id": trace_id},
     )
     if not spans:
         raise HTTPException(404, "Trace not found")
+    total_span_count = int(spans[0].pop("total_span_count"))
     for span in spans:
+        span.pop("total_span_count", None)
         for field in (
             "resource_json",
             "scope_json",
@@ -419,6 +401,8 @@ def trace_detail(
         {
             "trace_id": trace_id,
             "spans": spans,
+            "total_span_count": total_span_count,
+            "truncated": total_span_count > len(spans),
             "graph": json.loads(graph[0]["graph_json"]) if graph else None,
             "features": json.loads(graph[0]["features_json"]) if graph else None,
         }
@@ -441,6 +425,28 @@ def sessions(
             {"project_id": str(project_id)},
         )
     )
+
+
+@app.get("/api/projects/{project_id}/sessions/{session_id:path}")
+def session_detail(
+    project_id: uuid.UUID,
+    session_id: str,
+    _: str = Depends(_authorized_project),
+    settings: Settings = Depends(_settings),
+) -> dict[str, Any]:
+    if not session_id or len(session_id) > 512:
+        raise HTTPException(404, "Session not found")
+    rows = _query(
+        settings,
+        "SELECT session_id, count() AS trace_count, max(start_time) AS last_seen, "
+        "sum(error_count) AS errors, sum(cost_nano_usd) AS cost_nano_usd "
+        "FROM trace_summaries FINAL WHERE project_id = {project_id:UUID} "
+        "AND session_id = {session_id:String} GROUP BY session_id LIMIT 1",
+        {"project_id": str(project_id), "session_id": session_id},
+    )
+    if not rows:
+        raise HTTPException(404, "Session not found")
+    return jsonable_encoder(rows[0])
 
 
 @app.get("/api/projects/{project_id}/health")
@@ -618,6 +624,10 @@ def record_tool_schema(
 ) -> dict[str, Any]:
     new_fingerprint = fingerprint(data.schema_data)
     with postgres(settings) as connection:
+        connection.execute(
+            "SELECT pg_advisory_xact_lock(%s)",
+            (advisory_lock_key("tool-schema", project_id, data.tool_name),),
+        )
         previous = cast(
             dict[str, Any] | None,
             connection.execute(

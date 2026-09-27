@@ -8,6 +8,7 @@ from enum import StrEnum
 from typing import Any
 
 GRAPH_VERSION = 1
+MAX_FEATURE_TOOL_SEQUENCE = 256
 
 
 class Operation(StrEnum):
@@ -75,6 +76,14 @@ class AgentRunGraph:
 
 
 _EXPLICIT_KINDS = {item.value: item for item in Operation}
+_KIND_ALIASES = {
+    "sub-agent": Operation.SUBAGENT,
+    "sub_agent": Operation.SUBAGENT,
+    "human-approval": Operation.APPROVAL,
+    "human_approval": Operation.APPROVAL,
+    "llm": Operation.MODEL,
+    "rag": Operation.RETRIEVAL,
+}
 
 
 def _operation(span: SpanFact) -> Operation:
@@ -82,6 +91,8 @@ def _operation(span: SpanFact) -> Operation:
     explicit = str(attrs.get("controlsurface.kind", "")).lower()
     if explicit in _EXPLICIT_KINDS:
         return _EXPLICIT_KINDS[explicit]
+    if explicit in _KIND_ALIASES:
+        return _KIND_ALIASES[explicit]
     operation = str(attrs.get("gen_ai.operation.name", "")).lower()
     if operation in {"chat", "generate_content", "text_completion", "embeddings"}:
         return Operation.MODEL
@@ -110,8 +121,26 @@ def build_graph(spans: Iterable[SpanFact], run_id: str | None = None) -> AgentRu
         seen.add(key)
 
     first = ordered[0]
-    identity = run_id or str(first.attributes.get("controlsurface.run.id") or first.trace_id)
-    session = str(first.attributes.get("controlsurface.session.id") or f"trace:{first.trace_id}")
+    identity = run_id or str(
+        next(
+            (
+                span.attributes["controlsurface.run.id"]
+                for span in ordered
+                if span.attributes.get("controlsurface.run.id")
+            ),
+            first.trace_id,
+        )
+    )
+    session = str(
+        next(
+            (
+                span.attributes["controlsurface.session.id"]
+                for span in ordered
+                if span.attributes.get("controlsurface.session.id")
+            ),
+            f"trace:{first.trace_id}",
+        )
+    )
     nodes = tuple(
         GraphNode(
             id=f"{span.trace_id}:{span.span_id}",
@@ -164,7 +193,9 @@ def build_graph(spans: Iterable[SpanFact], run_id: str | None = None) -> AgentRu
     roots = [span for span in ordered if not span.parent_span_id]
     terminal = max(roots or ordered, key=lambda span: span.end_ns)
     reason = terminal.attributes.get("controlsurface.termination_reason")
-    outcome = "error" if terminal.status == "error" else "success"
+    # A successful root span must not conceal a failed tool/model child. Agent
+    # reliability is an execution-level property, not just the root status.
+    outcome = "error" if any(span.status == "error" for span in ordered) else "success"
     if reason in {"cancelled", "timeout", "incomplete"}:
         outcome = str(reason)
     return AgentRunGraph(
@@ -187,7 +218,9 @@ def graph_features(graph: AgentRunGraph) -> dict[str, Any]:
     retries = sum(edge.relation is Relation.RETRY_OF for edge in graph.edges)
     repeats = sum(left == right for left, right in zip(tools, tools[1:], strict=False))
     return {
-        "tool_sequence": tools,
+        "tool_sequence": tools[:MAX_FEATURE_TOOL_SEQUENCE],
+        "tool_count": len(tools),
+        "tool_sequence_truncated": len(tools) > MAX_FEATURE_TOOL_SEQUENCE,
         "retry_count": retries,
         "consecutive_tool_repeats": repeats,
         "subagent_count": sum(node.operation is Operation.SUBAGENT for node in graph.nodes),

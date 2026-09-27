@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+import json
 import logging
 import os
+import re
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -22,6 +25,40 @@ _log = logging.getLogger(__name__)
 _session: contextvars.ContextVar[str | None] = contextvars.ContextVar("cs_session", default=None)
 _run: contextvars.ContextVar[str | None] = contextvars.ContextVar("cs_run", default=None)
 _SECRET_MARKERS = ("token", "password", "secret", "authorization", "api_key", "credential")
+_BEARER = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]+", re.IGNORECASE)
+_URL_SECRET = re.compile(
+    r"([?&](?:access[_-]?token|api[_-]?key|token|password|secret)=)[^&#\s]+",
+    re.IGNORECASE,
+)
+
+
+def _safe_text(value: str) -> str:
+    clipped = value[:8192]
+    return _URL_SECRET.sub(r"\1[REDACTED]", _BEARER.sub("Bearer [REDACTED]", clipped))
+
+
+def _structured_text(value: Any) -> str:
+    def redact(item: Any, depth: int = 0) -> Any:
+        if depth > 16:
+            return "[TRUNCATED]"
+        if isinstance(item, dict):
+            return {
+                str(key): (
+                    "[REDACTED]"
+                    if any(marker in str(key).lower() for marker in _SECRET_MARKERS)
+                    else redact(child, depth + 1)
+                )
+                for key, child in item.items()
+            }
+        if isinstance(item, list | tuple):
+            return [redact(child, depth + 1) for child in item[:256]]
+        if isinstance(item, str):
+            return _safe_text(item)
+        if item is None or isinstance(item, bool | int | float):
+            return item
+        return str(item)[:1024]
+
+    return _safe_text(json.dumps(redact(value), separators=(",", ":"), default=str))
 
 
 def _safe_attributes(attributes: dict[str, Any]) -> dict[str, str | int | float | bool]:
@@ -31,8 +68,10 @@ def _safe_attributes(attributes: dict[str, Any]) -> dict[str, str | int | float 
             result[key] = "[REDACTED]"
         elif isinstance(value, bool | int | float):
             result[key] = value
+        elif isinstance(value, str):
+            result[key] = _safe_text(value)
         elif value is not None:
-            result[key] = str(value)[:8192]
+            result[key] = _structured_text(value)
     return result
 
 
@@ -57,7 +96,15 @@ class ControlSurface:
         key = api_key or os.getenv("CONTROLSURFACE_API_KEY")
         if not key:
             raise ValueError("ControlSurface API key is required")
-        if not endpoint.startswith(("http://", "https://")):
+        parsed_endpoint = urlsplit(endpoint)
+        if (
+            parsed_endpoint.scheme not in {"http", "https"}
+            or not parsed_endpoint.hostname
+            or parsed_endpoint.username is not None
+            or parsed_endpoint.password is not None
+            or parsed_endpoint.query
+            or parsed_endpoint.fragment
+        ):
             raise ValueError("ControlSurface endpoint must be an HTTP(S) URL")
         resource = Resource.create(
             {

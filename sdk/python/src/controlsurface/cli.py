@@ -5,15 +5,18 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
+import subprocess  # nosec B404
 import sys
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import jsonschema
+
+# Candidate isolation uses this interpreter with a fixed module argv and JSON stdin.
 
 
 def _json(path: str) -> Any:
@@ -24,18 +27,41 @@ def _write(path: str, value: Any) -> None:
     Path(path).write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _api_base() -> str:
+    value = os.getenv("CONTROLSURFACE_API_URL", "http://localhost:8000").rstrip("/")
+    try:
+        parsed = urlsplit(value)
+        valid = (
+            parsed.scheme in {"http", "https"}
+            and parsed.hostname is not None
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.query
+            and not parsed.fragment
+        )
+        _ = parsed.port
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ValueError("CONTROLSURFACE_API_URL must be an HTTP(S) URL without credentials")
+    return value
+
+
 def _request(path: str, method: str = "GET", body: Any = None, auth: bool = True) -> Any:
-    base = os.getenv("CONTROLSURFACE_API_URL", "http://localhost:8000").rstrip("/")
-    headers = {"Content-Type": "application/json"}
+    base = _api_base()
+    headers: dict[str, str] = {}
     if auth:
         token = os.getenv("CONTROLSURFACE_API_KEY")
         if not token:
             raise ValueError("CONTROLSURFACE_API_KEY is required")
         headers["Authorization"] = f"Bearer {token}"
     encoded = json.dumps(body).encode() if body is not None else None
+    if encoded is not None:
+        headers["Content-Type"] = "application/json"
     request = urllib.request.Request(base + path, encoded, headers, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        # The base is parsed and restricted to HTTP(S) above.
+        with urllib.request.urlopen(request, timeout=10) as response:  # nosec B310
             return json.load(response)
     except urllib.error.HTTPError as error:
         detail = error.read(2048).decode("utf-8", "replace")
@@ -91,9 +117,25 @@ def _evaluate_case(
 
 def eval_run(args: argparse.Namespace) -> int:
     suite = _json(args.suite)
+    if not isinstance(suite, dict):
+        raise ValueError("Suite must be a JSON object")
     items = suite.get("cases")
     if not isinstance(items, list) or not items:
         raise ValueError("Suite must contain a nonempty cases array")
+    if len(items) > 5000:
+        raise ValueError("Suite may contain at most 5000 cases")
+    if not 1 <= args.timeout <= 3600:
+        raise ValueError("Evaluation timeout must be between 1 and 3600 seconds")
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            raise ValueError(f"Suite case {index} must be an object")
+        case_id = item.get("id")
+        if not isinstance(case_id, str) or not case_id.strip() or len(case_id) > 200:
+            raise ValueError(f"Suite case {index} requires a nonempty ID up to 200 characters")
+        if not isinstance(item.get("input"), dict):
+            raise ValueError(f"Suite case {case_id} input must be an object")
+        if not isinstance(item.get("expected", {}), dict):
+            raise ValueError(f"Suite case {case_id} expected value must be an object")
     ids = [item["id"] for item in items]
     if len(ids) != len(set(ids)):
         raise ValueError("Suite case IDs must be unique")
@@ -101,7 +143,7 @@ def eval_run(args: argparse.Namespace) -> int:
     for item in items:
         start = time.perf_counter_ns()
         try:
-            process = subprocess.run(
+            process = subprocess.run(  # nosec B603
                 [sys.executable, "-m", "controlsurface.case_worker"],
                 input=json.dumps(
                     {
@@ -158,6 +200,12 @@ def eval_run(args: argparse.Namespace) -> int:
 def gate(args: argparse.Namespace) -> int:
     baseline = _json(args.baseline)
     candidate = _json(args.candidate)
+    if not isinstance(baseline, dict) or not isinstance(candidate, dict):
+        raise ValueError("Baseline and candidate result files must be JSON objects")
+    if not isinstance(baseline.get("results"), list) or not isinstance(
+        candidate.get("results"), list
+    ):
+        raise ValueError("Baseline and candidate files must contain results arrays")
     submission = {
         "baseline": baseline["results"],
         "candidate": candidate["results"],
@@ -250,7 +298,14 @@ def main() -> None:
     args = parser.parse_args()
     try:
         raise SystemExit(args.func(args))
-    except (OSError, ValueError, urllib.error.URLError, subprocess.TimeoutExpired) as error:
+    except (
+        KeyError,
+        OSError,
+        TypeError,
+        ValueError,
+        urllib.error.URLError,
+        subprocess.TimeoutExpired,
+    ) as error:
         print(f"Error: {error}", file=sys.stderr)
         raise SystemExit(1) from error
 

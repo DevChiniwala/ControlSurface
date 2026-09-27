@@ -1,109 +1,314 @@
-# ControlSurface engineering report
+# ControlSurface final engineering report
 
-Status: **private-source pre-release candidate, not public-release sign-off** · 2026-09-20. Source may be synchronized to the owner's private GitHub repository; no package or container image has been published. This report distinguishes verified behavior from remaining release gates.
+Report date: 2026-09-27
+
+Owner and maintainer: Dev Chiniwala
+
+Repository: `DevChiniwala/ControlSurface` (`main`, private at audit time)
+
+Status: **locally verified v0.1.0-rc.1 source candidate; remote CI and binary artifact clearance remain**
 
 ## Project status
 
-The deterministic closed loop passed on a fresh disposable Docker stack: Python SDK → authenticated OTLP → durable inbox → ClickHouse traces and agent-run graph → Production Health → breaking payment-tool schema → failure cluster → incident with ranked change evidence → reviewed production-derived regression → broken candidate BLOCK → fixed candidate PASS → content-hashed release evidence. The latest clean-stack seed-and-verify test completed in 103.53 seconds and also checked captured model output and payment-tool arguments in the stored trace. An authenticated Chromium test then exercised the visible investigation, release-evidence, logout, and redesigned sign-in path. The test-only stack and its volumes were removed afterward; the development volumes were retained.
+ControlSurface implements and verifies its defining loop:
 
-This proves a representative local path, not production readiness. Broader browser/accessibility interaction, large-scale performance, remote deployment security, and binary redistribution reviews remain open.
+```text
+Python SDK
+  → authenticated OTLP ingest
+  → durable compressed inbox
+  → ClickHouse raw traces + AgentRunGraph
+  → Production Health and SLO degradation
+  → deterministic failure cluster
+  → incident with inspectable change evidence
+  → reviewed production-derived regression
+  → paired baseline/candidate evaluation
+  → reproducible BLOCK/PASS release evidence
+```
 
-## Architecture and repository structure
+The full synthetic refund-agent workflow passes on a fresh Compose stack. The first-boot readiness blocker is fixed and passed twice on independent volumes. Browser deep links, recovery, outage behavior, large-trace rendering, dependency audits, and reproducible benchmarks have been exercised. This is a serious self-hosted single-owner release candidate, not a production HA or managed multi-tenant release.
 
-ControlSurface is an original modular Python control plane, separate OTLP receiver and projection worker, Next.js/TypeScript application, Python SDK/CLI, PostgreSQL, and ClickHouse. Docker Compose runs these plus one-shot migrations. No Redis, Rust service, Kubernetes operator, or paid model service is required. See [ARCHITECTURE.md](ARCHITECTURE.md).
+## Implemented features
 
-| Path | Purpose |
+### Foundation
+
+- Docker Compose with PostgreSQL 17, ClickHouse 25.8, one-shot migrations, API, separate OTLP receiver, projection worker, standalone Next.js web runtime, and opt-in benchmark service.
+- Base images pinned by digest; Python runtime dependencies pinned exactly.
+- API/ingest/web/database host ports bound to loopback.
+- Authenticated readiness and dependency ordering; failed migration keeps dependent services stopped.
+- PostgreSQL advisory locks for concurrency-sensitive setup, schema, incident, regression, dataset, and trace-projection paths.
+
+### Observe
+
+- OTLP/HTTP protobuf/JSON and OTLP/gRPC trace ingestion authenticated by project key.
+- Sessions, agent runs, model, tool, retrieval, memory, retry, sub-agent, workflow, error, event, token, supplied-cost, provider, and environment attributes.
+- Preserved raw spans, trace summaries, session lookup, full-window aggregates, and versioned replacement for late spans.
+- Trace list/search and dense three-part trace detail: execution tree, transcript/timeline, contextual inspector.
+- Detail API exposes truncation metadata and safely supports 10,000 source spans; the browser tree is bounded to 2,000 rows and transcript to 160 events.
+
+### AgentRunGraph
+
+- Framework-independent normalized graph stored separately from source telemetry.
+- Node kinds for agent, model, tool, retrieval, memory, retry, sub-agent, approval, workflow, and unknown operations.
+- Parent/child, sequence, delegation, and retry relationships when source evidence permits.
+- Derived features for tool sequence, repeated tools, retry count, step count, termination, and outcome.
+- Any failing child span correctly propagates a failed graph outcome.
+
+### Evaluate
+
+- Datasets and revisioned dataset items.
+- Exact output, JSON Schema, completion, maximum-step, required-tool, and forbidden-tool checks.
+- Trusted local Python evaluator hook and deterministic fixtures.
+- Paired baseline/candidate files with duplicate/missing-case validation and comparable metrics.
+- Evaluation stays outside ingestion; V1 execution is local CLI/CI rather than a server job service.
+
+### Monitor
+
+- 24-hour per-agent health aggregation.
+- Completion-rate, tool-success-rate, and p95-latency SLO policies with minimum sample thresholds.
+- Healthy/degraded/SLO-burn/incident presentation foundations.
+- Operational tool schema/version data and tool-call behavior in traces.
+- Configurable ClickHouse trace/summary/graph TTL through `CS_TRACE_RETENTION_DAYS`.
+
+### Diagnose
+
+- Bounded deterministic failure signatures and clusters.
+- Representative execution selection instead of one test per duplicate failure.
+- First-class incidents, affected-run evidence, dominant cluster, related traces, and chronological evidence.
+- Change Ledger for deployments, prompts, models, tools, schemas, retrievers, environment, and version changes.
+- Tool schema fingerprinting plus structural breaking-change classification.
+- Ranked root-cause candidates with timing/match evidence and explicit scoring. Scores are association evidence, not causal proof.
+
+### Improve
+
+- Incident/cluster/trace to editable regression review.
+- Captured source trace, failure signature, input, expected behavior, affected-run evidence, and review requirement.
+- Per-project deduplication and revisioned suite export.
+- Human review required before a production failure becomes an assertion.
+
+### Ship
+
+- Candidate comparison and gate policy with thresholds and critical-case checks.
+- Machine-readable exit status for CI.
+- Immutable API-level ReleaseEvidence record with content SHA-256.
+- Frozen baseline/candidate versions, dataset and suite revisions, evaluator versions, prompt/tool hashes, model/sampling/pricing/environment configuration, policy, individual results, regressions, and decision.
+- Evidence verification function and CLI output suitable for release automation.
+
+### Operator experience
+
+- Owner-password reset with exact-owner validation and browser-session revocation.
+- Coordinated PostgreSQL custom dump plus ClickHouse native backup with SHA-256 manifest.
+- Restore only into a fresh Compose project with no containers or volumes.
+- Inbox status, dead-letter visibility, explicit bounded requeue, forward-only rollback policy, and outage runbook.
+- `controlsurface doctor` for API, databases, migrations, and project-key validation.
+
+## Architecture
+
+ControlSurface is an understandable modular monolith with separate processes where failure isolation matters:
+
+```text
+SDK / OTLP client
+  → receiver
+  → compressed PostgreSQL telemetry_inbox
+  → worker
+  → ClickHouse spans, summaries, agent_run_graphs
+
+PostgreSQL metadata
+  ←→ project-scoped FastAPI control plane
+  ←→ Next.js web application / Python CLI
+```
+
+PostgreSQL owns identity, keys, operational metadata, Change Ledger, tool schemas, SLOs, datasets, incidents, regressions, and evidence. ClickHouse owns high-volume source facts and projections. Redis and a message broker are deliberately absent. The durable inbox stores compressed OTLP batches rather than one row per span; acknowledgement happens after the PostgreSQL commit.
+
+Ingestion and API are separate processes. ClickHouse failure does not immediately stop ingest while bounded inbox capacity remains. Worker retry is bounded and observable. The SDK exporter is asynchronous and fail-safe, accepting that queued telemetry may be lost during abrupt process termination.
+
+## Repository structure
+
+| Path | Responsibility |
 | --- | --- |
-| `apps/web` | Production Health application and investigation workflows |
-| `apps/web/tests` | Authenticated Chromium closed-loop browser test |
-| `services/controlplane` | API, auth, OTLP receiver, worker, domain services, migrations, tests |
-| `sdk/python` | Fail-safe instrumentation SDK, deterministic evaluator, CLI |
-| `examples/refund_agent` | Synthetic healthy/broken/fixed agent lifecycle; optional live model adapter |
-| `tests/e2e` | Disposable full-stack hero acceptance test |
-| `benchmarks` | Local durable-inbox comparison harness |
-| `compose.yaml` | Loopback-bound development deployment |
+| `apps/web` | Next.js application, reusable investigation components, browser E2E |
+| `services/controlplane` | FastAPI, auth, OTLP receiver, worker, domain logic, migrations, operator CLI |
+| `sdk/python` | Instrumentation SDK, evaluator, release gate, user CLI |
+| `examples/refund_agent` | Synthetic healthy/broken/fixed demo lifecycle |
+| `tests/e2e` | Disposable real-service hero acceptance test |
+| `benchmarks` | System, browser, clustering, scale, storage, and inbox harnesses |
+| `deploy/clickhouse` | Native backup-disk configuration |
+| `scripts/recovery.py` | Coordinated backup and fresh-project restore |
+| `docs` | Operations and exact release audit |
+| `.github/workflows` | Quality and disposable hero E2E jobs |
 
-## UI foundation, adapted components, and original UI work
+## UI foundation chosen
 
-The application and shell are independently authored. **No UI source, components, styles, assets, or text were adapted from private research material.** Production Health is the landing page; traces are supporting evidence. Functional surfaces include traces/sessions, clusters/incidents, Change Ledger, regression review, datasets and items, release-evidence inspection, SLO policies, and API keys. Trace detail shows the execution tree and contextual tabs for captured input/output, model settings, tokens/cost, tool arguments/results, retrieval, errors, events, and metadata. The auth screen now uses the dark navy/blue-violet brand system, an original geometric mark and wordmark component, a compact login panel, and a labeled illustrative product preview that collapses to a small health preview on mobile. The preview figures are **not live metrics**. The rest of the authenticated application receives the shared palette and mark, but its page layouts have not been comprehensively redesigned. A disposable Chromium test traverses the investigation path, dataset and release detail, logout, mobile auth width, and real UI sign-in back to Production Health. Broader browser, visual, and accessibility QA remains open.
+The application UI is independently authored for ControlSurface. No third-party product application shell, component, CSS, text, asset, or implementation file was adapted. Commodity open-source runtime packages are consumed through package managers under their own licenses.
+
+Production Health—not traces—is the landing experience. The information hierarchy is health → incident → failure cluster → representative run → raw trace. The visual system uses deep navy/charcoal surfaces, white and muted blue-gray typography, electric blue/violet brand accents, semantic status colors, compact typography, thin borders, restrained glow, dense tables, and bounded motion.
+
+## UI components adapted
+
+None from the private research material. Generic icons come from Lucide through its public package. All first-party brand, shell, layout, execution, incident, regression, and release components are ControlSurface work.
+
+## Original UI work
+
+- Responsive dark application shell, grouped sidebar, project selector, top breadcrumb/context bar, mobile navigation, command palette, and error/retry state.
+- Continuous-canvas authentication with ControlSurface brand mark, blue/violet product visualization, responsive compact health preview, and no template split-screen treatment.
+- Production Health metric strip, agent rows, active incident evidence, recent release decision, and recent run table.
+- Execution tree, agent-oriented transcript, waterfall timeline, contextual span tabs, session story panel, dataset inspector, incident evidence/timeline, regression review, release evidence, Change Ledger, SLO table, API-key modal/reveal, empty states, skeletons, and errors.
+- Deep links for `/overview`, `/traces`, `/traces/[traceId]`, `/sessions/[sessionId]`, `/incidents`, `/incidents/[incidentId]`, `/datasets`, `/regressions`, `/releases/[releaseId]`, `/slos`, `/changes`, `/settings/api-keys`, and `/failure-clusters`.
+- Browser history-aware close behavior, global session-expiry handling, focus containment for panels/forms, visible focus, semantic dialogs/tabs, and 390px overflow checks.
+
+The main authenticated orchestrator remains a large client component even after extracting execution, inspector, session, command-palette, auth-visual, and focus modules. Further route-specific component extraction is maintainability work, not a release blocker.
 
 ## Backend and databases
 
-PostgreSQL owns the single owner account, multiple projects, hashed/revocable API keys, compressed batch inbox, SLO policies, Change Ledger, tool-schema versions, datasets, incidents, regression cases, and release evidence. ClickHouse stores source span facts, trace summaries, and versioned graph projections. Migrations run on startup and were re-run against the clean stack. The receiver acknowledges only after a bounded PostgreSQL write; the worker retries projection and quarantines repeatedly failing batches. There is no production HA or cross-region durability claim.
+The API uses strongly validated request models, project-scoped authentication dependencies, explicit CSRF for owner-session mutations, parameterized SQL, bounded query results, and structured HTTP failures. Large control-plane JSON bodies are rejected above 2 MiB. Login uses a bounded process-local sliding-window limiter.
 
-## Telemetry and SDK
+PostgreSQL migrations are forward-only and idempotent. ClickHouse DDL creates raw spans, replacing trace summaries, and replacing graph projections. Trace updates compute aggregates across the full stored window while graph materialization remains bounded. Per-trace advisory locking prevents concurrent late batches from racing a complete projection.
 
-The receiver accepts authenticated OTLP/HTTP and OTLP/gRPC trace exports, validates/bounds/redacts them, and stores source and derived projections separately. The Python SDK provides explicit session, agent-run, and typed spans for model, retrieval, tool, memory, retry, sub-agent, and other operations. Its OpenTelemetry batch exporter fails safely when the endpoint is unavailable, at the cost of possible telemetry loss. General framework auto-instrumentation, metrics/logs ingestion, and a TypeScript SDK are deferred. The SDK package is installed locally; it has not been published.
+## Telemetry
+
+The receiver validates trace/span ID lengths, timestamps/durations, decompression expansion, nesting, span count, authorization, and inbox capacity. It rejects trailing gzip data and invalid content types. Attribute redaction covers common secret keys, bearer values, cookies, authorization, and common secret URL query names. Redaction is intentionally documented as best-effort.
+
+Raw resource, scope, span, attributes, events, and links stay available independently of derived ControlSurface semantics. No proprietary transformation replaces the source telemetry.
+
+## Python SDK
+
+`ControlSurface.init()` validates a non-credential-bearing HTTP(S) endpoint and requires a project key. Batch export uses bounded queue/batch/timeouts and does not raise exporter failures into agent code. Explicit `session`, `run`, and typed `span` contexts propagate normalized attributes. Recursive structured-attribute redaction limits depth/size and masks common secret keys and bearer/query values.
+
+The SDK is not yet published to a package index. Automatic framework instrumentation and a TypeScript SDK are deferred.
 
 ## Evaluation
 
-The CLI evaluates local trusted candidates in subprocesses. Built-in checks cover expected output, JSON Schema, completion, step limits, required/forbidden tools, and optional trusted Python evaluators. Paired result files support deterministic baseline/candidate comparison. Server-side asynchronous evaluation jobs, hostile-code sandboxing, and operational LLM-judge execution are not complete.
+Deterministic evaluation is implemented and used by the release workflow. Candidate processes and optional evaluators are trusted local subprocesses; they are not safe for hostile code. Server-side asynchronous jobs, a sandbox, general judge providers, and human-review queues are deferred.
 
-## SLO and reliability monitoring
+## SLO and reliability
 
-Production Health aggregates observed runs in a 24-hour window and applies minimum-sample SLO policies for completion, tool success, and p95 latency. It can surface an incident state. Tool-schema fingerprints and structural compatibility classification feed the Change Ledger. Persistent error-budget accounting, drift analysis, and a general signal/alert runtime are deferred.
+Health and SLO computation is real and backed by ClickHouse trace/graph facts. Current views use a 24-hour window and minimum samples. Persistent rolling windows, error-budget history, burn alerts, and an always-on incident proposal engine are the next major differentiator.
 
-## Failure clustering, incidents, and root cause
+## Failure clustering
 
-The worker normalizes raw spans into a framework-independent AgentRunGraph linked to source IDs. Deterministic features include tool sequence, retry/repetition, steps, outcome, and termination. Recent failed runs are grouped by bounded signatures with representative traces. Incident analysis ranks explicit nearby changes, matching tool identity, and time proximity. Every candidate exposes its supporting facts. An evidence score is an association heuristic, **not a causal probability or proof**. Affected/unaffected cohort analysis and a richer incident timeline remain open.
+Clustering uses deterministic bounded features rather than an LLM call per span. Signatures include outcome, termination, tool sequence, repeated tools, retry behavior, failed operation, and error type/text. Recent failures group into stable populations with bounded representatives. A 2,000-run/20-cluster synthetic benchmark measured 5.222 ms p50 and 6.088 ms p95 on the audited machine.
+
+## Incidents and root cause
+
+Incidents link affected runs, SLO evidence, cluster evidence, representative traces, and explicit change candidates. Tool/schema identity and temporal distance influence the score. Evidence is visible and individually inspectable. Cohort analysis and richer durable incident state/resolution remain for v0.2.
 
 ## Regression system
 
-Representative failures yield editable, review-required regression candidates. Accepted cases retain source trace and cluster identities and are deduplicated in a revisioned suite export. The clean-stack test exported the production suite, evaluated healthy/broken/fixed candidates against it, and obtained BLOCK/PASS decisions. Human review is required because a failed output is not automatically a correct expected assertion.
+Production failures are mined at the cluster level. Representative candidates are editable and review-required. Accepted cases keep source IDs and enter revisioned suites. Concurrent duplicate creation is serialized. The browser workflow verifies the incident → review → representative trace transition and the CLI verifies suite export/evaluation.
 
-## Release gate and CLI
+## Release gate
 
-The gate validates paired case IDs, rejects duplicates, applies versioned thresholds and critical-case checks, and freezes versions, suite/dataset revisions, evaluator versions, prompt/tool hashes, model configuration, sampling, pricing, environment, policy, individual results, and decision in a SHA-256-addressed bundle. The API is append-only and idempotent by project/hash; it is not tamper-proof against a database administrator. The CLI implements `doctor`, `eval run`, `gate`, `incidents list`, `regression create`, and `regression export`. Broken candidates return nonzero status; fixed candidates return zero status.
+Gate inputs are validated for matching IDs, uniqueness, required manifest fields, supported thresholds, and critical cases. The resulting evidence is content-addressed and reproducible. It is immutable through the API, not tamper-proof from a privileged database administrator. External signing/witnessing is deferred.
+
+## CLI
+
+Working commands include `doctor`, `eval run`, `gate`, `incidents list`, `regression create`, and `regression export`. CLI JSON/suite/result size and structure are bounded. Invalid input produces a clean nonzero result. A blocked gate exits nonzero; a passing gate exits zero.
 
 ## Test results
 
-- Python unit/SDK suite: **25 passed**, with two opt-in end-to-end tests skipped in the ordinary run; one Python 3.16 deprecation warning from a dependency.
-- Disposable Docker full-stack hero test: **1 passed in 103.53 seconds** on the latest seeded run. It exercised owner-session CSRF rejection, project-key precedence, project isolation, dataset API, OTLP ingest, captured model/tool context, Health, graph/cluster/incident/change evidence, regression suite export, paired evaluations, BLOCK/PASS gates, manifest hashes, and evidence verification.
-- Authenticated Chromium workflow: **1 passed in 3.1 seconds** on the seeded disposable stack, including a loaded 390px Health view, the redesigned desktop/mobile auth states, and real UI sign-in after logout; a separate real-service login-limit test **passed in 36.78 seconds**, verifying HTTP 429 and `Retry-After`.
-- Ruff lint/format, full backend/SDK mypy (20 source files), web ESLint, TypeScript typecheck, Prettier check, and Next.js production build pass locally.
-- GitHub Actions defines quality and disposable full-stack jobs, including the seeded Chromium workflow, but it has not yet run on the eventual public repository. Multi-browser, accessibility, and wider interaction-state tests are not present.
+Latest local results:
+
+- Ruff lint and format: pass across server, SDK, example, tests, benchmarks, and scripts.
+- mypy: pass across 23 backend/SDK/operator source files.
+- Backend/SDK unit suite: **57 passed**; remaining warnings are dependency deprecations.
+- TypeScript typecheck, ESLint, Prettier: pass.
+- Standalone Next.js production build: pass.
+- Fresh-stack migration replay: pass.
+- Full hero E2E: **1 passed in 107.84 seconds**.
+- Chromium product workflow: **1 passed** after repair of incident-to-regression route state.
+- Real-service login throttling: pass at the 20-attempt boundary with positive `Retry-After`.
+- First boot: pass twice on independent clean project/volume sets.
+- Service logs during hero flow: no matching traceback/error/critical/panic/fatal/unhandled output.
+
+CI defines a `quality` job and a dependent disposable `hero-e2e` job. The remote workflow must pass on the exact final commit before tagging.
 
 ## Benchmarks
 
-A single local run of `benchmarks/inbox.py` used 200 synthetic compressed batches of approximately 2,075 bytes each. Measured throughput / p95 acknowledgement: SQLite WAL 218.3 batches/s / 6.378 ms; PostgreSQL fresh-connection 47.9 batches/s / 25.624 ms; PostgreSQL pooled 364.5 batches/s / 3.736 ms. These tiny measurements are **not** production capacity claims. Worker throughput, end-to-end projection latency, ClickHouse insert/query latency, storage growth, SDK overhead, and evaluation throughput still need controlled workloads. The PostgreSQL inbox remains because a local disk spool has not passed crash replay, isolation, or outage validation.
+Audited environment: Python 3.13.15, Linux 6.6.87.2 under WSL2, single-node Docker Compose, loopback, synthetic data.
 
-## Security, provenance, and license status
+| Measurement | p50 | p95 |
+| --- | ---: | ---: |
+| SDK manual span scope | 0.029 ms | 0.093 ms |
+| OTLP acknowledgement | 48.730 ms | 105.534 ms |
+| Send-to-projection | 3,370.651 ms | 5,857.643 ms |
+| Trace list (50) | 25.173 ms | 32.520 ms |
+| Trace detail (1K) | 145.438 ms | 156.202 ms |
+| Trace detail (10K) | 1,122.591 ms | 1,257.100 ms |
+| Browser render (1K) | 422.881 ms | 462.987 ms |
+| Browser render (10K source / 2K tree) | 1,555.740 ms | 1,877.091 ms |
+| Clustering (2K failures) | 5.646 ms | 5.769 ms |
 
-Current controls include Argon2 owner-password hashes, hashed project keys, project-scoped APIs, bound SQL parameters, ingress limits, redaction foundations, loopback-bound Compose ports, HttpOnly/SameSite browser sessions with session-bound CSRF tokens for mutations, a bounded process-local owner-login limiter, and configured CORS. Limitations include no distributed or proxy-aware rate limit, incomplete remote-deployment hardening and retention controls, potentially sensitive telemetry, and trusted local evaluator execution. See [SECURITY.md](SECURITY.md).
+Measured throughput was 1,245.94 spans/second. Dedicated projection took 779.735 ms for 1K and 1,290.130 ms for 10K spans. The 21K-span storage delta was 714,056 bytes, a sample-normalized estimate of 34,002,667 bytes per million spans. These are not capacity claims.
 
-The private research archives, audits, and provenance ledger are outside this repository. No source was copied or adapted from them. The project declares Apache-2.0 for original code. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) records important runtime licenses, including LGPL components in database and image-processing dependencies. An artifact-specific transitive/container license and notice review is still required before publishing binary images. No secret, prohibited-reference-brand, or dependency-audit claim is final until repeated on the exact commit proposed for release.
+## Security status
 
-## Known limitations and deferred features
+Implemented: Argon2, dummy-hash timing behavior, password rehash, hashed/revocable keys, digested sessions, CSRF, project isolation, strict CORS, security headers, request/ingest bounds, safe SQL, redaction, loopback, non-root images, pinned dependency manifest, and process-local login throttling.
 
-This is a self-hosted single-owner/multiple-project local V1, not a hardened multi-user hosted service. Online evaluation jobs, general LLM judges, advanced drift, persistent error budgets, broad framework auto-instrumentation, coding-agent integrations, comprehensive alert delivery, managed retention, backup/restore automation, and distributed ingestion are deferred. Browser automation covers one happy-path workflow, not every page or failure state. An isolated first boot exposed a ClickHouse initialization/health-check race: the first migration attempt failed to connect, then succeeded on Compose retry. Startup readiness needs hardening before release. There is no published Python package or container image.
+Known limits: trusted single-owner host, no SSO/RBAC, no built-in TLS, no distributed limiter, incomplete free-text secret detection, trusted evaluator subprocesses, and privileged-operator access to data/evidence. `SECURITY.md` defines the exact trust boundary.
 
-## Local run and demo
+## Recovery status
 
-Follow [README.md](README.md): set independent `.env` secrets, run `docker compose up --build`, create the owner/project, install `sdk/python` locally, create a key, then run `controlsurface doctor`. Follow [the refund-agent example](examples/refund_agent/README.md) for healthy traffic, controlled schema break, incident/regression review, and production-suite release gates. Synthetic mode uses no paid API. Its optional live-model mode transmits text to a provider and can incur charges.
+The release audit performed a real coordinated backup and restored it into a new project. Checksums matched; PostgreSQL and ClickHouse counts matched exactly. Owner reset revoked six sessions. Worker, ClickHouse, and API outage probes all recovered, with three synthetic traces visible afterward. Migration rollback is forward-only restore-to-fresh, not automated down migration.
+
+## Provenance status
+
+The private audit/provenance material remains outside this repository. ControlSurface first-party implementation is independent. Repository-wide policy scanning returns zero forbidden reference-project names in first-party public files. No source history was imported.
+
+## License status
+
+Original source uses Apache-2.0. Direct and important transitive dependencies are recorded in `THIRD_PARTY_NOTICES.md`. Exact image SBOMs and installed package-license metadata were reviewed, while npm runtime and pinned Python runtime vulnerability audits report zero known vulnerabilities as of the audit date. Public binary/container publication remains blocked on assembling the required base-image/native license texts and corresponding-source/relinking compliance materials, especially for LGPL/GPL components.
+
+## Known limitations
+
+- Single-owner self-hosted profile; no production HA, failover, or multi-region durability.
+- No server-side asynchronous evaluation queue or hostile-code sandbox.
+- No persistent error-budget history or always-on incident proposal engine.
+- Structural schema compatibility can miss semantic behavior changes.
+- Evidence is not externally signed and a privileged operator can rewrite databases.
+- Telemetry redaction cannot discover every free-text or encoded secret.
+- General framework auto-instrumentation and TypeScript SDK are not implemented.
+- The main web orchestrator should be split further as route complexity grows.
+- No public Python or container artifact is published.
+
+## Deferred features
+
+Enterprise SSO/RBAC, billing, Kubernetes operator, automatic rollback, traffic router, marketplace, many SDKs, coding-agent specialization, broad alerts, and a marketing site are deferred until the always-on reliability loop is proven.
+
+## Local run instructions
+
+1. Copy `.env.example` to `.env` and replace all three secrets.
+2. Run `docker compose up --build -d --wait`.
+3. Confirm `migrate` exited 0 and all long-running services are healthy/running.
+4. Open `http://localhost:3000`, create the owner/project, and create a project key.
+5. Install `sdk/python` locally and run `controlsurface doctor`.
+6. Follow `examples/refund_agent/README.md` for the closed-loop demo.
+
+## Demo instructions
+
+Use the deterministic refund-agent mode. Show healthy Production Health, register the deliberate payment schema break, emit failure traffic, inspect the cluster/incident/change evidence, open a representative execution, review the mined regression, evaluate the fixed candidate, and open the passing release evidence. Do not substitute invented UI metrics or paid-provider claims.
 
 ## GitHub readiness
 
-**Private source sync only; not ready to make public or publish binaries.** The scripted and one authenticated browser closed loop are verified, but the first-start migration race, broader browser/accessibility QA, dependency/container licensing, remote-deployment security, operator recovery procedures, and broader performance validation remain open. Re-run secret and license checks on the exact public-release commit. Do not treat a private repository push as public-release approval.
+The local source candidate is ready to commit and push to the existing private repository once the final staged secret/naming checks pass. After push, require both remote workflows to pass. Making the source repository public and tagging `v0.1.0-rc.1` are appropriate only after that result. Publishing Python/container artifacts is a separate decision and is not approved by this report.
 
 ## Top 20 next issues
 
-1. Expand authenticated browser coverage to empty, loading, error, and retry states across the visible navigation.
-2. Visually review dataset, trace, incident, and release-evidence panels at narrow widths; only Health overflow is currently asserted.
-3. Add keyboard/focus and accessibility tests across overlays, forms, trace tree, and navigation.
-4. Add distributed/proxy-aware rate limiting and complete the remote-deployment security review.
-5. Threat-model telemetry capture, redaction, and secrets embedded in free text or URLs.
-6. Publish operator backup, restore, and retention procedures; test restore from real volumes.
-7. Remove development dependencies from runtime images and complete transitive Python/npm and base-image license/NOTICE review for each artifact.
-8. Add reproducible dependency locks and security update policy for Python packages.
-9. Measure OTLP acknowledgement and end-to-end projection latency under controlled load.
-10. Benchmark ClickHouse insert, trace-list/detail query latency, and storage per million spans.
-11. Measure SDK overhead and loss behavior during endpoint or process failure.
-12. Stress-test inbox backpressure, worker retry/quarantine, and ClickHouse outages.
-13. Add OTLP/gRPC and SDK contract fixtures for malformed, duplicate, and late spans.
-14. Expand graph normalization fixtures across agent frameworks and branching/retry semantics.
-15. Add incident affected/unaffected cohort comparison to strengthen change rankings.
-16. Add a durable incident timeline and explicit resolution workflow.
-17. Persist error-budget burn and build a bounded signal evaluation loop.
-18. Build asynchronous server-side evaluation jobs with isolation and reproducible artifacts.
-19. Add a release-evidence verification command and optional external witness/signature.
-20. Re-run the clean-stack test, CI, provenance, secret, and licensing reviews on the exact release commit before publishing.
+1. Run and require the remote quality and hero-E2E workflows on the candidate commit.
+2. Record the 60–90 second real-product refund lifecycle demo.
+3. Generate an exact container/package SBOM and finish binary license/notice clearance.
+4. Persist rolling SLO windows, error budgets, and burn rates.
+5. Build bounded scheduled failure-population clustering.
+6. Add automatic incident proposals with deduplication and review.
+7. Add durable incident acknowledgement, resolution, and timeline state.
+8. Add affected/unaffected cohort comparison to change evidence.
+9. Deepen tool/MCP contract compatibility and blast-radius analysis.
+10. Report sanitized release-gate results on pull requests.
+11. Split the main authenticated web orchestrator into route-specific feature components.
+12. Add automated accessibility checks and keyboard tests for every overlay/form.
+13. Expand browser coverage for empty, error, retry, expired-session, and outage states.
+14. Add sustained-load and long-running storage/merge benchmarks.
+15. Add a hardened remote deployment profile with TLS/proxy guidance and distributed rate limits.
+16. Build isolated asynchronous evaluation workers and reproducible evaluator environments.
+17. Add external signing/witnessing for release evidence.
+18. Add the TypeScript SDK after telemetry contract fixtures stabilize.
+19. Add selected high-value framework integrations without changing core semantics.
+20. Re-run clean install, restore, outage, benchmark, vulnerability, secret, and license audits for every release candidate.

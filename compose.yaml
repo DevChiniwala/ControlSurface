@@ -2,7 +2,8 @@ name: controlsurface
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:f02121de6f74d30d8a94cd1d9584125e2178d7e6c377d8130112d4e52d867995
+    restart: unless-stopped
     environment:
       POSTGRES_USER: controlsurface
       POSTGRES_DB: controlsurface
@@ -18,7 +19,8 @@ services:
       retries: 20
 
   clickhouse:
-    image: clickhouse/clickhouse-server:25.8
+    image: clickhouse/clickhouse-server:25.8@sha256:0152dd511befe6a2c2ef53e930726179669b08116da78500b37c51c96ff5ee77
+    restart: unless-stopped
     environment:
       CLICKHOUSE_DB: controlsurface
       CLICKHOUSE_USER: controlsurface
@@ -28,11 +30,22 @@ services:
       - "127.0.0.1:58123:8123"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_backups:/backups
+      - ./deploy/clickhouse/backup_disk.xml:/etc/clickhouse-server/config.d/backup_disk.xml:ro
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8123/ping"]
+      # /ping can succeed before the entrypoint has created the database/user.
+      test:
+        - CMD-SHELL
+        - >-
+          clickhouse-client --host 127.0.0.1
+          --user "$${CLICKHOUSE_USER}"
+          --password "$${CLICKHOUSE_PASSWORD}"
+          --database "$${CLICKHOUSE_DB}"
+          --query 'SELECT 1' >/dev/null
       interval: 3s
       timeout: 3s
-      retries: 30
+      retries: 60
+      start_period: 10s
 
   migrate:
     build:
@@ -49,6 +62,7 @@ services:
       CS_BOOTSTRAP_TOKEN: ${CS_BOOTSTRAP_TOKEN:?Set CS_BOOTSTRAP_TOKEN in .env}
       CS_COOKIE_SECURE: ${CS_COOKIE_SECURE:-false}
       CS_CORS_ORIGINS: ${CS_CORS_ORIGINS:-http://localhost:3000}
+      CS_TRACE_RETENTION_DAYS: ${CS_TRACE_RETENTION_DAYS:-}
       CS_MIGRATIONS_DIR: /app/migrations
     depends_on:
       postgres:
@@ -65,6 +79,19 @@ services:
     environment: *backend_env
     ports:
       - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -78,6 +105,19 @@ services:
     ports:
       - "127.0.0.1:4318:4318"
       - "127.0.0.1:4317:4317"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:4318/health/ready', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -88,6 +128,7 @@ services:
       dockerfile: services/controlplane/Dockerfile
     command: ["python", "-m", "controlsurface_server.worker"]
     environment: *backend_env
+    restart: unless-stopped
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -102,9 +143,36 @@ services:
       NEXT_PUBLIC_CONTROL_API: ${CS_PUBLIC_API_URL:-http://localhost:8000}
     ports:
       - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+
+  benchmark:
+    profiles: [benchmark]
+    build:
+      context: .
+      dockerfile: benchmarks/Dockerfile
+    environment:
+      <<: *backend_env
+      CS_BENCH_API_URL: http://api:8000
+      CS_BENCH_OTLP_URL: http://ingest:4318
+      CS_BENCH_OWNER_PASSWORD: ${CS_BENCH_OWNER_PASSWORD:-}
+    depends_on:
+      api:
+        condition: service_started
+      ingest:
+        condition: service_started
+      worker:
+        condition: service_started
 
 volumes:
   postgres_data:
   clickhouse_data:
+  clickhouse_backups:

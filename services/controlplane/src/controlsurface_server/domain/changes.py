@@ -32,7 +32,9 @@ class ContractDiff:
 
 
 def canonical_json(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    )
 
 
 def fingerprint(schema: dict[str, Any]) -> str:
@@ -48,8 +50,22 @@ def compare_contracts(before: dict[str, Any], after: dict[str, Any]) -> Contract
             ContractChange("$", "Unsupported or missing object properties", Compatibility.UNKNOWN)
         )
     else:
-        old_required = set(before.get("required", []))
-        new_required = set(after.get("required", []))
+        old_required_value = before.get("required", [])
+        new_required_value = after.get("required", [])
+        old_required = (
+            {item for item in old_required_value if isinstance(item, str)}
+            if isinstance(old_required_value, list)
+            else set()
+        )
+        new_required = (
+            {item for item in new_required_value if isinstance(item, str)}
+            if isinstance(new_required_value, list)
+            else set()
+        )
+        if not isinstance(old_required_value, list) or not isinstance(new_required_value, list):
+            changes.append(
+                ContractChange("$.required", "Required fields are malformed", Compatibility.UNKNOWN)
+            )
         for name in sorted(old_props.keys() - new_props.keys()):
             changes.append(ContractChange(name, "Field removed", Compatibility.BREAKING))
         for name in sorted(new_required - old_required):
@@ -67,7 +83,8 @@ def compare_contracts(before: dict[str, Any], after: dict[str, Any]) -> Contract
             if (
                 isinstance(old_enum, list)
                 and isinstance(new_enum, list)
-                and set(old_enum) - set(new_enum)
+                and {canonical_json(value) for value in old_enum}
+                - {canonical_json(value) for value in new_enum}
             ):
                 changes.append(
                     ContractChange(name, "Allowed values removed", Compatibility.BREAKING)

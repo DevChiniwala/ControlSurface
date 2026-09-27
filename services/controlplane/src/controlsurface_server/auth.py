@@ -14,10 +14,12 @@ from threading import Lock
 from time import monotonic
 
 from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
 
 from .storage import DbConnection
 
 _passwords = PasswordHasher()
+_DUMMY_PASSWORD_HASH = _passwords.hash("controlsurface-login-timing-placeholder")
 
 
 class LoginRateLimiter:
@@ -101,17 +103,42 @@ def verify_password(connection: DbConnection, email: str, password: str) -> str 
     row = connection.execute(
         "SELECT id, password_hash FROM users WHERE email = %s", (email.lower().strip(),)
     ).fetchone()
+    encoded = row["password_hash"] if row else _DUMMY_PASSWORD_HASH
+    try:
+        _passwords.verify(encoded, password)
+    except (VerificationError, InvalidHashError):
+        return None
     if not row:
         return None
-    try:
-        _passwords.verify(row["password_hash"], password)
-    except Exception:
-        return None
+    if _passwords.check_needs_rehash(encoded):
+        connection.execute(
+            "UPDATE users SET password_hash = %s WHERE id = %s",
+            (_passwords.hash(password), row["id"]),
+        )
     return str(row["id"])
+
+
+def reset_owner_password(connection: DbConnection, email: str, new_password: str) -> None:
+    """Offline owner recovery; revoke browser sessions, retain project API keys."""
+    if len(new_password) < 12:
+        raise ValueError("Password must contain at least 12 characters")
+    normalized = email.lower().strip()
+    with connection.transaction():
+        connection.execute("SELECT pg_advisory_xact_lock(75972419)")
+        owners = connection.execute("SELECT id, email FROM users LIMIT 2").fetchall()
+        if len(owners) != 1 or owners[0]["email"] != normalized:
+            raise ValueError("Exactly one configured owner must match the supplied email")
+        owner_id = owners[0]["id"]
+        connection.execute(
+            "UPDATE users SET password_hash = %s WHERE id = %s",
+            (_passwords.hash(new_password), owner_id),
+        )
+        connection.execute("DELETE FROM browser_sessions WHERE user_id = %s", (owner_id,))
 
 
 def create_browser_session(connection: DbConnection, user_id: str) -> str:
     token = secrets.token_urlsafe(32)
+    connection.execute("DELETE FROM browser_sessions WHERE expires_at <= now()")
     connection.execute(
         "INSERT INTO browser_sessions(token_hash, user_id, expires_at) VALUES (%s, %s, %s)",
         (_digest(token), user_id, datetime.now(UTC) + timedelta(days=7)),

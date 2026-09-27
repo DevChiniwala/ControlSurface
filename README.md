@@ -1,32 +1,74 @@
 # ControlSurface
 
 <p align="center">
-  <img src="assets/controlsurface-banner.svg" alt="ControlSurface: production telemetry becomes agent-run graphs, failure evidence, regression cases, and release decisions" width="100%" />
+  <img src="assets/controlsurface-banner.svg" alt="ControlSurface turns production telemetry into agent reliability and release decisions" width="100%" />
 </p>
 
-**The production engineering platform for AI agents.**
+<p align="center">
+  <strong>Production engineering for AI agents.</strong><br />
+  Observe → Evaluate → Monitor → Diagnose → Improve → Ship
+</p>
 
-Observe · Evaluate · Monitor · Diagnose · Ship
+<p align="center">
+  <a href="https://github.com/DevChiniwala/ControlSurface/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/DevChiniwala/ControlSurface/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="LICENSE"><img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-4F6BFF" /></a>
+</p>
 
-ControlSurface connects what happened in production to what should happen at the next release. It retains OpenTelemetry source spans, derives a framework-independent agent run graph, groups failures, relates them to recorded changes, and turns reviewed production failures into regression tests and content-hashed release evidence.
+Production failures become incidents. Incidents become regression tests. Regression tests become release decisions.
 
-> **Pre-release, self-hosted V1.** The deterministic end-to-end workflow and one browser journey have passed locally. This is not a hardened hosted service or a substitute for human release review. The Python package and container images are not published. See [current limitations](#project-status-and-limits).
+ControlSurface connects OpenTelemetry traces, framework-independent agent execution graphs, SLOs, explicit production changes, failure clusters, regression suites, and immutable release evidence. Raw telemetry remains inspectable; every derived diagnosis and gate decision links back to its evidence.
 
-## The engineering loop
+> **Release-candidate status.** The complete synthetic failure-to-fixed-release workflow, clean first boot, browser journey, backup/restore rehearsal, outage recovery, and reproducible benchmarks pass locally. The Python package and container images are not published. This is a single-owner self-hosted release candidate, not a managed or high-availability service.
 
-| Stage        | What ControlSurface does today                                                                                                                                                                           |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Observe**  | Accepts authenticated OTLP/HTTP and OTLP/gRPC traces; links sessions, agent runs, model, tool, retrieval, memory, retry, and sub-agent spans; shows latency, errors, and supplied token/cost attributes. |
-| **Evaluate** | Stores datasets and items; runs deterministic assertions and optional trusted Python evaluators locally; compares paired baseline and candidate results.                                                 |
-| **Monitor**  | Computes observed agent health over a 24-hour window and applies completion, tool-success, and latency SLO policies.                                                                                     |
-| **Diagnose** | Builds an `AgentRunGraph`, groups recent failures by deterministic signatures, and ranks nearby recorded changes with inspectable evidence. Scores indicate association, **not proof of cause**.         |
-| **Ship**     | Mines representative regression candidates for review, exports revisioned suites, and produces a content-hashed, API append-only pass/block evidence bundle from a local or CI gate.                     |
+## Why ControlSurface
 
-The source trace stays intact. The run graph, failure signatures, and reliability signals are separate projections, so an engineer can inspect the raw evidence behind a decision.
+Most telemetry systems answer “what happened?” ControlSurface continues the engineering loop:
 
-## Run it locally
+```text
+authenticated production telemetry
+              ↓
+ framework-independent AgentRunGraph
+              ↓
+    SLO and failure intelligence
+              ↓
+ incident + inspectable change evidence
+              ↓
+ deduplicated production-derived regression
+              ↓
+     baseline/candidate evaluation
+              ↓
+ content-addressed release evidence
+              ↓
+          SHIP or BLOCK
+```
 
-You need Docker with Compose, Python 3.11+, and free local ports **3000**, **8000**, **4317**, **4318**, **55432**, and **58123**. The Compose services bind host ports to loopback.
+Four concepts anchor the product:
+
+- **AgentRunGraph** normalizes model calls, tools, retrieval, memory, retries, sub-agents, approvals, outcomes, and state transitions while preserving the source spans.
+- **Change Ledger** records deployments, prompts, models, tool contracts, retrievers, environments, and versions as explicit evidence for incident analysis.
+- **Production-derived regressions** mine representative failures from a cluster for human review instead of producing hundreds of duplicate tests.
+- **Release evidence** freezes baseline and candidate versions, suite and dataset revisions, evaluator versions, prompt/tool hashes, model configuration, policy, results, and decision under a content hash.
+
+Root-cause rankings are evidence scores, never claims of causal proof.
+
+## What works today
+
+| Area | Release-candidate capability |
+| --- | --- |
+| Observe | Authenticated OTLP/HTTP and OTLP/gRPC, sessions, raw spans, 10K-span detail API, model/tool/retrieval/agent semantics, latency, errors, tokens, and supplied costs |
+| Normalize | Versioned AgentRunGraph projections linked to raw trace/span IDs, with bounded execution-tree rendering |
+| Evaluate | Datasets and items, exact/schema/step/tool assertions, trusted local Python evaluators, paired baseline/candidate comparison |
+| Monitor | 24-hour agent health, completion/tool-success/latency SLOs, minimum samples, and health states |
+| Diagnose | Deterministic failure signatures, clusters, representative traces, incidents, tool-schema classification, and ranked nearby changes |
+| Improve | Editable, review-required, source-linked regression candidates and revisioned suite export |
+| Ship | Deterministic CLI gate, critical-case policies, machine exit status, SHA-256 evidence bundle, and evidence verification |
+| Operate | First-boot-safe migrations, retention TTLs, inbox backpressure, owner reset, coordinated backup/restore, dead-letter inspection/requeue, and outage recovery guidance |
+
+The web application opens on **Production Health**, then drills down through incident → failure cluster → representative agent run → raw trace. URL-addressable routes support deep links for overview, traces, sessions, incidents, datasets, regressions, releases, SLOs, changes, and API keys.
+
+## Quick start
+
+Requirements: Docker with Compose, Python 3.11+ for the SDK/CLI, and free local ports `3000`, `8000`, `4317`, `4318`, `55432`, and `58123`. All Compose ports bind to loopback.
 
 ```bash
 git clone https://github.com/DevChiniwala/ControlSurface.git
@@ -34,108 +76,143 @@ cd ControlSurface
 cp .env.example .env
 ```
 
-On PowerShell, use `Copy-Item .env.example .env` instead of `cp`. Before starting, edit `.env` and replace **all three** placeholder values (`CS_DB_PASSWORD`, `CS_CH_PASSWORD`, and `CS_BOOTSTRAP_TOKEN`) with different, long random secrets. Never commit `.env`.
+On PowerShell, use `Copy-Item .env.example .env`. Replace all three placeholder values in `.env` with independent random secrets, then start the stack:
 
 ```bash
-docker compose up --build -d
-docker compose ps
+docker compose up --build -d --wait
+docker compose ps -a
 ```
 
-Wait for `migrate` to exit successfully, then open **http://localhost:3000**. Create the first owner and project with the bootstrap token from your private `.env`. In **API keys**, create a project key and copy it when shown; the plaintext key is not shown again.
+The one-shot `migrate` service must exit with code 0. Open [http://localhost:3000](http://localhost:3000), create the owner and first project with the bootstrap token from `.env`, then create a project API key. The plaintext key is shown once.
 
-The API is at `http://localhost:8000`. OTLP/HTTP traces go to `http://localhost:4318/v1/traces`; OTLP/gRPC is at `localhost:4317`.
+Endpoints:
 
-> On a fresh Docker volume, ClickHouse initialization can briefly race the first migration attempt. If `migrate` fails to connect to ClickHouse, wait for its container to become healthy and rerun `docker compose up -d`. This startup race is tracked as a release-readiness issue, not considered normal production behavior.
+| Service | Local endpoint |
+| --- | --- |
+| Application | `http://localhost:3000` |
+| Control API | `http://localhost:8000` |
+| OTLP/HTTP traces | `http://localhost:4318/v1/traces` |
+| OTLP/gRPC | `localhost:4317` |
 
-### Instrument a Python agent
+The authenticated ClickHouse readiness probe and bounded migration retry remove the previous first-boot race: two independent clean-volume boots passed on the first Compose invocation during the release audit.
 
-Install the SDK and CLI from this checkout; `pip install controlsurface` is **not** a published-install path yet.
+## Instrument a Python agent
+
+The package is installed from this checkout until a package artifact is published:
 
 ```bash
 python -m pip install -e sdk/python
 ```
 
-Set `CONTROLSURFACE_API_KEY` to the project key you just created. For example, in PowerShell:
-
-```powershell
-$env:CONTROLSURFACE_API_KEY = "<your-project-key>"
-controlsurface doctor
-```
-
-For Bash, use `export CONTROLSURFACE_API_KEY='<your-project-key>'`. `doctor` checks API/database readiness and key access; it does not send telemetry.
-
-This minimal example emits a session and typed agent, retrieval, and tool spans:
+Set `CONTROLSURFACE_API_KEY` to the project key. Instrumentation is explicit and fail-safe:
 
 ```python
 from controlsurface import ControlSurface
 
 cs = ControlSurface.init(
     endpoint="http://localhost:4318",
+    api_key="<project-key>",
     agent_name="support-agent",
-    environment="development",
+    agent_version="v19",
+    environment="production",
 )
+
 try:
     with cs.session():
-        with cs.run("support-request"):
+        with cs.run("support-request", input="I was charged twice"):
             with cs.span("policy-search", kind="retrieval"):
-                policies = ["Verify the transaction before issuing a refund"]
-            with cs.span("transaction-check", kind="tool"):
-                verified = bool(policies)
+                pass
+            with cs.span("lookup-transactions", kind="tool"):
+                pass
 finally:
     cs.shutdown()
 ```
 
-Replace the example operations with your own agent work. Instrumentation is explicit in V1; there is no claim of automatic support for every agent framework. The exporter batches asynchronously and is designed not to fail application work when ControlSurface is unavailable, but queued telemetry can be lost. Prompt and tool content are **not captured automatically**; explicitly supplied input or attributes may be sensitive. Read [SECURITY.md](SECURITY.md) before sending real data.
+Exporter batching happens off the application path. An unavailable endpoint does not fail agent work, but queued telemetry can be lost during process termination or a long outage. Prompt and tool content are not captured automatically; explicitly supplied input and attributes may be sensitive. Read [SECURITY.md](SECURITY.md) before using real data.
 
-### See the failure-to-release workflow
-
-The included [refund-agent example](examples/refund_agent/README.md) uses synthetic customer/payment data and a deterministic model fixture by default—no paid model account is needed. It emits healthy runs, registers a breaking payment-tool schema, emits failures, discovers a cluster, creates an incident with change evidence, and emits a fixed candidate. The example explains how to review/export cases and run blocked and passing release gates.
-
-To run it, set `CONTROLSURFACE_PROJECT_ID` to the ID of your new project. Retrieve the ID with your key:
+Validate connectivity without emitting a trace:
 
 ```bash
-curl -H "Authorization: Bearer $CONTROLSURFACE_API_KEY" http://localhost:8000/api/projects
+controlsurface doctor
 ```
 
-In PowerShell, use `Invoke-RestMethod http://localhost:8000/api/projects -Headers @{ Authorization = "Bearer $env:CONTROLSURFACE_API_KEY" }`. Set the ID from the response with `$env:CONTROLSURFACE_PROJECT_ID = "<project-id>"`; in Bash, use `export CONTROLSURFACE_PROJECT_ID='<project-id>'`. Then run:
+## Run the hero workflow
+
+The [customer-support refund agent](examples/refund_agent/README.md) uses synthetic data and a deterministic model fixture by default. It demonstrates:
+
+```text
+healthy traffic
+  → breaking payments.refund schema
+  → Production Health degradation
+  → failure cluster
+  → incident + change evidence
+  → representative run
+  → reviewed regression
+  → broken candidate BLOCK
+  → fixed candidate PASS
+```
+
+Set `CONTROLSURFACE_PROJECT_ID` and `CONTROLSURFACE_API_KEY`, then run:
 
 ```bash
 python examples/refund_agent/demo.py
 ```
 
-Open **Production Health → Incidents → representative trace → regression case** in the app. The example is intentionally controlled; its fixture calls and recorded costs are not claims about a real model provider or production traffic. Its optional live-model mode is separately documented and may incur charges.
+The opt-in live-model adapter is separately documented and may transmit content or incur provider charges. The default workflow requires no paid API.
 
-## How it is built
+## Architecture
 
 ```text
-Python SDK or any authenticated OTLP client
-  → OTLP receiver → bounded, compressed PostgreSQL inbox
-  → asynchronous worker → ClickHouse source traces + AgentRunGraph projections
-                                  ↓
-PostgreSQL projects, SLOs, changes, incidents, regressions, release evidence
-                                  ↓
-                       project-scoped API → web application / CLI
+Python SDK / authenticated OTLP client
+  → OTLP receiver
+  → bounded compressed PostgreSQL inbox
+  → asynchronous projection worker
+  → ClickHouse raw spans + summaries + AgentRunGraph
+
+PostgreSQL
+  → identity, projects, keys, SLOs, changes, tool schemas
+  → datasets, incidents, regressions, release evidence
+
+project-scoped API
+  → Next.js application and CLI
 ```
 
-PostgreSQL holds operational metadata and the durable telemetry inbox; ClickHouse holds source spans, trace summaries, and graph projections. A failed ClickHouse projection is retried rather than making the instrumented application wait for analytics. See [ARCHITECTURE.md](ARCHITECTURE.md) for storage boundaries, backpressure, idempotency, and graph semantics.
+PostgreSQL provides durable acknowledgement and operational metadata. ClickHouse owns high-volume telemetry and derived graph projections. Projection failure never makes the instrumented request wait; the worker retries, then quarantines repeatedly failing batches. See [ARCHITECTURE.md](ARCHITECTURE.md) for boundaries, idempotency, backpressure, and graph semantics.
 
-| Directory                                        | Purpose                                                    |
-| ------------------------------------------------ | ---------------------------------------------------------- |
-| [`apps/web`](apps/web)                           | Next.js application and browser tests                      |
-| [`services/controlplane`](services/controlplane) | API, OTLP ingest, worker, domain logic, migrations         |
-| [`sdk/python`](sdk/python)                       | Python telemetry SDK, evaluator, and CLI                   |
-| [`examples/refund_agent`](examples/refund_agent) | Synthetic failure-to-fix walkthrough                       |
-| [`tests/e2e`](tests/e2e)                         | Disposable full-stack acceptance path                      |
-| [`benchmarks`](benchmarks)                       | Local measurement harnesses, not published capacity claims |
+| Path | Purpose |
+| --- | --- |
+| [`apps/web`](apps/web) | Dark-first Next.js application and Chromium workflow |
+| [`services/controlplane`](services/controlplane) | API, OTLP receivers, worker, migrations, domain logic |
+| [`sdk/python`](sdk/python) | Instrumentation SDK, deterministic evaluators, CLI |
+| [`examples/refund_agent`](examples/refund_agent) | Synthetic healthy/broken/fixed lifecycle |
+| [`tests/e2e`](tests/e2e) | Disposable full-stack acceptance path |
+| [`benchmarks`](benchmarks) | Reproducible SDK, ingest, query, rendering, clustering, and storage measurements |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Readiness, backup/restore, retention, outage, and migration policy |
 
-## Project status and limits
+## Measured performance
 
-ControlSurface is under active development. The local V1 closed-loop test passes, but several capabilities remain intentionally incomplete: server-side asynchronous evaluation jobs, general LLM judges, broad automatic framework instrumentation, a TypeScript SDK, persistent error-budget accounting, advanced drift and alerts, multi-user SSO/RBAC, managed retention, and production HA. The authenticated application’s visual redesign is also still in progress beyond the sign-in screen and shared theme.
+One reproducible local run on 2026-09-27 measured **1,245.94 spans/second**, **48.730 ms p50 OTLP acknowledgement**, **3.371 s p50 send-to-projection**, **145.438 ms p50 1K-span trace detail**, and **1,122.591 ms p50 10K-span trace detail**. Browser route-to-render measured **422.881 ms p50** for 1K rows and **1,555.740 ms p50** for a 10K-source-span trace with a deliberately bounded 2K-row tree.
 
-The current release gate is reproducible at the API level, not tamper-proof against a database administrator. Root-cause rankings are evidence scores, not causal probabilities. A broader security, performance, accessibility, operator-recovery, and binary dependency-license review is required before a public production release. Read the [engineering report](FINAL_ENGINEERING_REPORT.md) for verified tests and open gates, [roadmap](ROADMAP.md) for next work, and [third-party notices](THIRD_PARTY_NOTICES.md) for dependency-license considerations.
+These are synthetic single-machine measurements, not capacity or production-sizing claims. Hardware, workload, complete p95 results, storage caveats, and reproduction commands are in [benchmarks/README.md](benchmarks/README.md).
 
-## Contribute and report issues
+## Operations and recovery
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md) for local checks and test-stack safety. Please report vulnerabilities privately as described in [SECURITY.md](SECURITY.md); do not attach sensitive prompts or traces to a public issue. The project follows the [code of conduct](CODE_OF_CONDUCT.md).
+- `CS_TRACE_RETENTION_DAYS` configures bounded ClickHouse TTLs for spans, summaries, and run graphs.
+- `scripts/recovery.py backup` creates coordinated PostgreSQL and ClickHouse archives with SHA-256 checksums.
+- Restore refuses existing projects/volumes and targets a fresh Compose project.
+- The offline owner reset revokes every browser session while preserving project API keys.
+- `inbox-status` and explicit dead-letter requeue support operator recovery.
+
+The release audit restored a seeded installation into a new project with exact counts, reset the owner password, and recovered telemetry through worker, ClickHouse, and API outages. Follow [docs/OPERATIONS.md](docs/OPERATIONS.md); rehearse with your own encrypted backup system before production use.
+
+## Security and release status
+
+Current controls include Argon2 password hashing, hashed high-entropy project keys, session-bound CSRF protection, project isolation, parameterized SQL, input and decompression limits, telemetry redaction foundations, strict CORS, security headers, process-local login throttling, non-root runtime images, loopback bindings, and pinned release-container dependencies/base-image digests.
+
+The trust model is intentionally narrow: a trusted single owner operates a trusted host. There is no enterprise SSO/RBAC, hostile evaluator sandbox, distributed rate limiter, built-in TLS termination, or protection from a privileged database/host operator. Free-text redaction is not complete. See [SECURITY.md](SECURITY.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and the exact [release audit](docs/RELEASE_AUDIT.md).
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before sending a change. CI runs Python formatting/lint/type/tests, frontend formatting/lint/type/build, a clean Compose boot, migration replay, the complete hero workflow, authenticated Chromium navigation, and login throttling. Do not commit customer telemetry, `.env`, API keys, generated evidence, copied third-party application code, or fabricated benchmark results.
 
 ControlSurface is created and maintained by **Dev Chiniwala**. Original ControlSurface source is licensed under [Apache-2.0](LICENSE); dependencies retain their own licenses.

@@ -63,6 +63,24 @@ def test_duplicate_source_span_is_rejected() -> None:
         build_graph([span, span])
 
 
+def test_run_graph_marks_failed_child_and_normalizes_agent_kinds() -> None:
+    root = _span("1" * 16, None, "agent", 1)
+    failed_tool = SpanFact(
+        trace_id=root.trace_id,
+        span_id="2" * 16,
+        parent_span_id=root.span_id,
+        name="refund.execute",
+        start_ns=2,
+        end_ns=3,
+        status="error",
+        attributes={"controlsurface.kind": "tool"},
+    )
+    delegated = _span("3" * 16, root.span_id, "sub-agent", 4)
+    graph = build_graph([root, failed_tool, delegated])
+    assert graph.outcome == "error"
+    assert graph.nodes[2].operation is Operation.SUBAGENT
+
+
 def test_schema_change_identifies_breaking_required_shape() -> None:
     before = {
         "type": "object",
@@ -81,6 +99,20 @@ def test_schema_change_identifies_breaking_required_shape() -> None:
     assert fingerprint(
         {"required": ["amount"], "properties": before["properties"], "type": "object"}
     ) == fingerprint(before)
+
+
+def test_schema_change_handles_structured_enum_values_and_malformed_required() -> None:
+    before = {
+        "properties": {"mode": {"type": "object", "enum": [{"name": "safe"}]}},
+        "required": "mode",
+    }
+    after = {
+        "properties": {"mode": {"type": "object", "enum": [{"name": "strict"}]}},
+        "required": ["mode"],
+    }
+    result = compare_contracts(before, after)
+    assert result.compatibility is Compatibility.BREAKING
+    assert any(change.path == "$.required" for change in result.changes)
 
 
 def test_failure_cluster_selects_distinct_inputs() -> None:
@@ -136,6 +168,12 @@ def test_release_gate_rejects_duplicate_case_ids() -> None:
     case = CaseResult("same", True, 1.0, True, 100, 100)
     with pytest.raises(ValueError, match="Duplicate case IDs"):
         decide_gate([case, case], [case, case], GatePolicy("v1"))
+
+
+def test_release_gate_rejects_unknown_critical_cases() -> None:
+    case = CaseResult("known", True, 1.0, True, 100, 100)
+    with pytest.raises(ValueError, match="Critical case IDs"):
+        decide_gate([case], [case], GatePolicy("v1", critical_case_ids=("typo",)))
 
 
 def test_release_gate_enforces_quality_latency_and_cost_bounds() -> None:

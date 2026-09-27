@@ -58,9 +58,10 @@ def sqlite_case(payloads: list[bytes], path: Path) -> dict[str, float]:
     )
     received = [row[0] for row in replay]
     connection.close()
-    assert [hashlib.sha256(item).digest() for item in received] == [
+    if [hashlib.sha256(item).digest() for item in received] != [
         hashlib.sha256(item).digest() for item in payloads
-    ]
+    ]:
+        raise RuntimeError("SQLite benchmark payload verification failed")
     return {
         "throughput_batches_per_s": round(len(payloads) / elapsed, 1),
         "p50_ack_ms": round(percentile(latencies, 0.5), 3),
@@ -122,10 +123,10 @@ def postgres_case(
                     ("project-one",),
                 )
             ]
-        assert len(received) == len(payloads)
-        assert {hashlib.sha256(item).digest() for item in received} == {
-            hashlib.sha256(item).digest() for item in payloads
-        }
+        if len(received) != len(payloads) or {
+            hashlib.sha256(item).digest() for item in received
+        } != {hashlib.sha256(item).digest() for item in payloads}:
+            raise RuntimeError("PostgreSQL benchmark payload verification failed")
         return {
             "throughput_batches_per_s": round(len(payloads) / elapsed, 1),
             "p50_ack_ms": round(percentile(latencies, 0.5), 3),

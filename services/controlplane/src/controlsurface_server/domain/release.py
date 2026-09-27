@@ -45,6 +45,10 @@ class GatePolicy:
             raise ValueError("Gate policy requires a revision and valid case limits")
         if not math.isfinite(self.minimum_tool_accuracy_delta):
             raise ValueError("Tool accuracy threshold must be finite")
+        if not -1 <= self.minimum_tool_accuracy_delta <= 1:
+            raise ValueError("Tool accuracy delta must be between -1 and 1")
+        if self.minimum_quality_delta is not None and not -1 <= self.minimum_quality_delta <= 1:
+            raise ValueError("Quality delta must be between -1 and 1")
         for threshold in (
             self.minimum_quality_delta,
             self.maximum_latency_delta_ms,
@@ -81,6 +85,9 @@ def decide_gate(
         raise ValueError("Baseline and candidate must contain the same case IDs")
     if len(before) < policy.minimum_cases:
         raise ValueError("Insufficient paired cases for gate policy")
+    unknown_critical = set(policy.critical_case_ids) - set(before)
+    if unknown_critical:
+        raise ValueError("Critical case IDs must exist in paired results")
     ids = sorted(before)
     regressions = tuple(
         case_id for case_id in ids if before[case_id].passed and not after[case_id].passed
@@ -121,14 +128,7 @@ def decide_gate(
     )
 
 
-def release_evidence(
-    baseline: Iterable[CaseResult],
-    candidate: Iterable[CaseResult],
-    policy: GatePolicy,
-    manifest: dict[str, Any],
-) -> dict[str, Any]:
-    before = tuple(sorted(baseline, key=lambda item: item.case_id))
-    after = tuple(sorted(candidate, key=lambda item: item.case_id))
+def _validate_manifest(manifest: dict[str, Any]) -> None:
     required = {
         "baseline_version",
         "candidate_version",
@@ -145,6 +145,31 @@ def release_evidence(
     missing = required - manifest.keys()
     if missing:
         raise ValueError(f"Incomplete evidence manifest: {', '.join(sorted(missing))}")
+    scalar_fields = {
+        "baseline_version",
+        "candidate_version",
+        "dataset_revision",
+        "suite_revision",
+        "pricing_version",
+    }
+    if any(
+        not isinstance(manifest[name], str) or not manifest[name].strip() for name in scalar_fields
+    ):
+        raise ValueError("Evidence manifest revision and version fields must be nonempty strings")
+    if manifest["execution_environment"] is None:
+        raise ValueError("Evidence manifest execution environment must be pinned")
+    canonical_json(manifest)
+
+
+def release_evidence(
+    baseline: Iterable[CaseResult],
+    candidate: Iterable[CaseResult],
+    policy: GatePolicy,
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    before = tuple(sorted(baseline, key=lambda item: item.case_id))
+    after = tuple(sorted(candidate, key=lambda item: item.case_id))
+    _validate_manifest(manifest)
     decision = decide_gate(before, after, policy)
     payload: dict[str, Any] = {
         "format_version": 1,
@@ -167,6 +192,7 @@ def verify_evidence(bundle: dict[str, Any]) -> bool:
         if hashlib.sha256(canonical_json(content).encode("utf-8")).hexdigest() != received:
             return False
         policy = GatePolicy(**content["policy"])
+        _validate_manifest(content["manifest"])
         baseline = [CaseResult(**item) for item in content["baseline_results"]]
         candidate = [CaseResult(**item) for item in content["candidate_results"]]
         recomputed = asdict(decide_gate(baseline, candidate, policy))

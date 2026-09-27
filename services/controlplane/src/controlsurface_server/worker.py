@@ -8,7 +8,7 @@ import logging
 import time
 import uuid
 import zlib
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -19,6 +19,8 @@ from .domain.failures import FailedRun, failure_signature
 from .domain.graph import SpanFact, build_graph, graph_features
 from .settings import Settings, load_settings
 from .storage import clickhouse, postgres
+
+MAX_PROJECTED_SPANS_PER_TRACE = 10_000
 
 log = logging.getLogger(__name__)
 SPAN_COLUMNS = [
@@ -156,10 +158,20 @@ def _refresh_trace(client: Any, project_id: str, trace_id: str) -> None:
     result = client.query(
         "SELECT span_id, parent_span_id, name, start_ns, end_ns, status, session_id, "
         "agent_name, agent_version, input_tokens, output_tokens, cost_nano_usd, "
-        "attributes_json, events_json FROM spans FINAL "
+        "attributes_json, events_json, count() OVER () AS total_span_count, "
+        "countIf(status = 'error') OVER () AS total_error_count, "
+        "sum(input_tokens) OVER () AS total_input_tokens, "
+        "sum(output_tokens) OVER () AS total_output_tokens, "
+        "sum(cost_nano_usd) OVER () AS total_cost_nano_usd, "
+        "min(start_ns) OVER () AS trace_start_ns, max(end_ns) OVER () AS trace_end_ns "
+        "FROM spans FINAL "
         "WHERE project_id = {project_id:UUID} AND trace_id = {trace_id:String} "
-        "ORDER BY start_ns, span_id",
-        parameters={"project_id": project_id, "trace_id": trace_id},
+        "ORDER BY start_ns, span_id LIMIT {limit:UInt32}",
+        parameters={
+            "project_id": project_id,
+            "trace_id": trace_id,
+            "limit": MAX_PROJECTED_SPANS_PER_TRACE,
+        },
     )
     if not result.result_rows:
         return
@@ -181,10 +193,19 @@ def _refresh_trace(client: Any, project_id: str, trace_id: str) -> None:
             )
         )
     graph = build_graph(spans)
+    total_span_count = int(result.result_rows[0][14])
+    total_error_count = int(result.result_rows[0][15])
+    total_input_tokens = int(result.result_rows[0][16])
+    total_output_tokens = int(result.result_rows[0][17])
+    total_cost_nano_usd = int(result.result_rows[0][18])
+    trace_start_ns = int(result.result_rows[0][19])
+    trace_end_ns = int(result.result_rows[0][20])
+    if total_error_count and graph.outcome == "success":
+        graph = replace(graph, outcome="error")
     roots = [span for span in spans if not span.parent_span_id]
     root = min(roots or spans, key=lambda item: item.start_ns)
-    start_ns = min(span.start_ns for span in spans)
-    end_ns = max(span.end_ns for span in spans)
+    start_ns = trace_start_ns
+    end_ns = trace_end_ns
     session = next((row[6] for row in result.result_rows if row[6]), graph.session_id)
     agent = next((row[7] for row in result.result_rows if row[7]), "")
     version = next((row[8] for row in result.result_rows if row[8]), "")
@@ -202,11 +223,11 @@ def _refresh_trace(client: Any, project_id: str, trace_id: str) -> None:
                 datetime.fromtimestamp(start_ns / 1e9, UTC),
                 datetime.fromtimestamp(end_ns / 1e9, UTC),
                 max(0, (end_ns - start_ns) // 1_000_000),
-                len(spans),
-                sum(span.status == "error" for span in spans),
-                sum(int(row[9]) for row in result.result_rows),
-                sum(int(row[10]) for row in result.result_rows),
-                sum(int(row[11]) for row in result.result_rows),
+                total_span_count,
+                total_error_count,
+                total_input_tokens,
+                total_output_tokens,
+                total_cost_nano_usd,
                 graph.outcome,
                 now,
             ]
@@ -231,6 +252,10 @@ def _refresh_trace(client: Any, project_id: str, trace_id: str) -> None:
         ],
     )
     features = graph_features(graph)
+    if total_span_count > len(spans):
+        features["projection_truncated"] = True
+        features["projected_span_count"] = len(spans)
+        features["total_span_count"] = total_span_count
     if graph.outcome != "success":
         error_event = next(
             (event for span in spans for event in span.events if event.get("name") == "exception"),
@@ -323,8 +348,19 @@ def process_one(settings: Settings) -> bool:
         try:
             if rows:
                 client.insert("spans", rows, column_names=SPAN_COLUMNS)
-            for trace_id in traces:
-                _refresh_trace(client, project_id, trace_id)
+            for trace_id in sorted(traces):
+                # Concurrent batches may contain different spans from the same
+                # trace. Serialize each derived projection so a late partial
+                # summary cannot replace a complete one.
+                lock_key = int.from_bytes(
+                    hashlib.sha256(f"{project_id}:{trace_id}".encode()).digest()[:8],
+                    "big",
+                    signed=True,
+                )
+                with postgres(settings) as connection:
+                    with connection.transaction():
+                        connection.execute("SELECT pg_advisory_xact_lock(%s)", (lock_key,))
+                        _refresh_trace(client, project_id, trace_id)
         finally:
             client.close()
         with postgres(settings) as connection:

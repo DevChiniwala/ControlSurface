@@ -1,20 +1,67 @@
 # Roadmap
 
-## V1 acceptance gate
+ControlSurface is built around one closed loop:
 
-The release is not ready until one repeatable local run demonstrates: instrument → authenticated OTLP ingest → ClickHouse and agent-run graph → Production Health/SLO → breaking tool schema and clustered failure → incident with inspectable change evidence → reviewed representative regression case → fixed candidate evaluation → reproducible release gate. This path needs integration and end-to-end tests, not only a narrated demo.
+```text
+instrument → observe → measure → detect → incident → evidence
+           → regression → candidate → reproducible release decision
+```
 
-The current pre-release build has the services, SDK, web surfaces, deterministic CLI evaluator, and release-evidence API. The full deterministic refund-agent path passed on a fresh disposable Docker stack on 2026-09-20, including production-derived regression export and blocked/fixed release gates. One Chromium journey also covers investigation, dataset and release detail, logout, and real sign-in through the redesigned auth screen. This validates one path, not every interaction, security hardening, or production-scale performance. Individual passing checks do not imply public release readiness.
+## v0.1 release candidate
 
-## Near-term work
+Implemented and locally verified:
 
-1. Extend browser interaction tests beyond the current happy path to empty, loading, error, and retry states across the visible navigation.
-2. Expand integration/contract tests across PostgreSQL, ClickHouse, OTLP/HTTP and gRPC, SDK, project isolation, and migration replay.
-3. Complete the operational-page visual redesign after the auth/theme phase, then verify keyboard access, responsive layout, trace detail, and every visible action in a browser.
-4. Measure ingest acknowledgement, worker throughput, end-to-end projection latency, trace/query latency, storage growth, and SDK overhead under controlled workloads. Publish only measured results with hardware and configuration context.
-5. Strengthen SLO computation, change-exposure cohorts, incident timeline, regression deduplication, and tool contract coverage.
-6. Complete platform-specific dependency/image license and secret scans, document operator backup/retention procedures, and review default security controls before public release.
+- clean first boot with authenticated database readiness and migration ordering;
+- Python SDK → OTLP → durable inbox → ClickHouse → API → web path;
+- raw telemetry plus framework-independent AgentRunGraph;
+- Production Health, SLO policy evaluation, failure clustering, incidents, and ranked Change Ledger evidence;
+- representative production-derived regression review and revisioned suites;
+- paired candidate evaluation and content-addressed release evidence;
+- URL-addressable operational routes and authenticated Chromium workflow;
+- owner recovery, coordinated PostgreSQL/ClickHouse backup and fresh-project restore, retention policy, and outage recovery;
+- reproducible SDK, ingestion, query, large-trace rendering, clustering, and storage measurements;
+- exact-manifest dependency, repository-history secret, naming-policy, and runtime-image reviews.
 
-## After V1
+Remaining release work is intentionally narrow:
 
-Broader SDK/framework integrations, managed multi-user deployment, advanced drift analysis, coding-agent telemetry, external alert delivery, durable large-scale ingestion options, and long-term retention policies are deferred until the core closed loop is proven.
+1. Run GitHub Actions on the exact candidate commit in the remote repository.
+2. Review the final staged diff and repeat secret/naming scans after staging.
+3. Capture a concise real-product hero demo from the synthetic refund workflow.
+4. Complete artifact-specific license/SBOM review before publishing Python or container artifacts.
+5. Tag `v0.1.0-rc.1` only after the remote pipeline is green.
+
+## v0.2: always-on reliability automation
+
+The next major product investment is not another dashboard. It is the continuous reliability loop:
+
+```text
+production traffic
+  → persistent SLO windows and error budgets
+  → degradation population
+  → bounded failure clustering
+  → automatically proposed incident
+  → evidence-ranked change candidates
+  → engineer review
+  → deduplicated regression candidates
+```
+
+Planned work:
+
+- durable SLO windows, error-budget accounting, and burn-rate evaluation;
+- scheduled bounded clustering over new failed-run populations;
+- incident proposal policy, deduplication, acknowledgement, resolution, and durable timeline;
+- affected/unaffected cohort comparison for stronger evidence rankings;
+- bounded behavioral signals with explicit cost and sampling controls;
+- notification adapters after the incident state machine is reliable.
+
+## Subsequent priorities
+
+1. **Tool/MCP contract intelligence** — deeper semantic compatibility, blast radius, affected agents, first failure, and release-gate policy.
+2. **GitHub pull-request reporting** — publish sanitized gate results and evidence links with a deterministic exit status.
+3. **TypeScript SDK and selected integrations** — only after contract fixtures and ingestion behavior are stable.
+4. **Evaluation runtime** — asynchronous jobs, reproducible environments, stronger isolation, and practical judge adapters.
+5. **Operational scale** — sustained-load validation, distributed rate limiting, production deployment profile, and larger tenancy model.
+
+## Explicitly deferred
+
+Enterprise SSO/RBAC, billing, a Kubernetes operator, automatic rollback, traffic routing, a marketplace, dozens of SDKs, and a broad marketing site are not near-term priorities. They should not dilute the telemetry-to-release loop.

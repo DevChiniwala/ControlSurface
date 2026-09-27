@@ -37,8 +37,10 @@ jobs:
           done
       - name: Lint and format Python
         run: |
-          python -m ruff check services/controlplane sdk/python examples/refund_agent tests
-          python -m ruff format --check services/controlplane sdk/python examples/refund_agent tests
+          python -m ruff check services/controlplane sdk/python examples/refund_agent tests benchmarks scripts
+          python -m ruff format --check services/controlplane sdk/python examples/refund_agent tests benchmarks scripts
+      - name: Validate installed Python dependencies
+        run: python -m pip check
       - name: Type-check backend and SDK
         run: python -m mypy services/controlplane/src sdk/python/src --ignore-missing-imports
       - name: Backend and SDK tests
@@ -83,15 +85,17 @@ jobs:
       - name: Create disposable stack credentials
         shell: bash
         run: |
-          echo "CS_DB_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
-          echo "CS_CH_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
-          echo "CS_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          {
+            echo "CS_DB_PASSWORD=$(openssl rand -hex 24)"
+            echo "CS_CH_PASSWORD=$(openssl rand -hex 24)"
+            echo "CS_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)"
+          } >> "$GITHUB_ENV"
       - name: Start the full stack
-        run: docker compose up --build -d
+        run: docker compose up --build -d --wait
       - name: Wait for API and web
         shell: bash
         run: |
-          for attempt in $(seq 1 90); do
+          for _ in $(seq 1 90); do
             if curl --fail --silent http://localhost:8000/health/ready >/dev/null &&
                curl --fail --silent http://localhost:3000/ >/dev/null; then
               exit 0

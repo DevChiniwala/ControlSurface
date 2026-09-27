@@ -1,0 +1,16 @@
+title = "ControlSurface secret-scanning policy"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore local dependency caches, generated output, and the untracked operator environment file."
+paths = [
+  '''(^|/)\.env$''',
+  '''(^|/)\.git/''',
+  '''(^|/)\.next/''',
+  '''(^|/)\.venv/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)playwright-report/''',
+  '''(^|/)test-results/''',
+]

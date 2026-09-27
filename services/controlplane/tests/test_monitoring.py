@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 
 from controlsurface_server import api
 from controlsurface_server.domain.slo import (
@@ -16,6 +17,16 @@ from controlsurface_server.domain.slo import (
     SloPolicy,
     evaluate_slo_metrics,
 )
+
+
+def test_control_plane_rejects_oversized_request_before_routing() -> None:
+    response = TestClient(api.app).post(
+        "/api/not-a-route",
+        content=b"x" * (2 * 1024 * 1024 + 1),
+        headers={"Content-Type": "application/octet-stream"},
+    )
+    assert response.status_code == 413
+    assert response.json() == {"detail": "Request body too large"}
 
 
 def test_slo_aggregate_tool_and_cost_breaches() -> None:
