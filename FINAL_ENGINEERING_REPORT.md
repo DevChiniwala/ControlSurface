@@ -6,7 +6,7 @@ Owner and maintainer: Dev Chiniwala
 
 Repository: `DevChiniwala/ControlSurface` (`main`, private at audit time)
 
-Status: **locally verified v0.1.0-rc.1 source candidate; remote CI and binary artifact clearance remain**
+Status: **locally and remotely verified v0.1.0-rc.1 source candidate; binary distribution clearance remains**
 
 ## Project status
 
@@ -219,7 +219,7 @@ Latest local results:
 - First boot: pass twice on independent clean project/volume sets.
 - Service logs during hero flow: no matching traceback/error/critical/panic/fatal/unhandled output.
 
-CI defines a `quality` job and a dependent disposable `hero-e2e` job. The remote workflow must pass on the exact final commit before tagging.
+The pinned Ubuntu 24.04 GitHub workflow passed on source candidate `8d3f1b795f7d1aeeb1fb8fe4b1cce37897744295`: `quality` completed in 1m04s and the dependent disposable `hero-e2e` job completed in 4m04s. The run is recorded at <https://github.com/DevChiniwala/ControlSurface/actions/runs/36322748409>.
 
 ## Benchmarks
 
@@ -288,7 +288,7 @@ Use the deterministic refund-agent mode. Show healthy Production Health, registe
 
 ## GitHub readiness
 
-The local source candidate is ready to commit and push to the existing private repository once the final staged secret/naming checks pass. After push, require both remote workflows to pass. Making the source repository public and tagging `v0.1.0-rc.1` are appropriate only after that result. Publishing Python/container artifacts is a separate decision and is not approved by this report.
+The source candidate is committed and pushed to the existing private repository. Staged/history secret scans, naming scans, and both remote workflows pass. Making the source repository public and tagging `v0.1.0-rc.1` are appropriate after the planned real-product demo and Dev Chiniwala's public-disclosure decision. Publishing Python/container artifacts is a separate decision and is not approved by this report.
 
 ## Top 20 next issues
 

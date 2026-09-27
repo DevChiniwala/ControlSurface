@@ -4,7 +4,7 @@ Audit date: 2026-09-27
 
 Scope: local source tree and locally built Linux/amd64 Compose artifacts
 
-Status: **local release-candidate checks pass; remote CI and binary-publication review remain**
+Status: **local and GitHub Actions release-candidate checks pass; binary distribution packaging remains**
 
 This record reports executed checks. It is not a promise that defects cannot exist, a security certification, or legal advice.
 
@@ -13,7 +13,7 @@ This record reports executed checks. It is not a promise that defects cannot exi
 - Fresh Git history belongs to ControlSurface and uses Dev Chiniwala's configured identity.
 - Repository-wide case-insensitive naming-policy scan: **0 matches**.
 - High-confidence key/private-key/token regex scan outside ignored build environments: **0 matches**.
-- Gitleaks v8.24.2 repository-history scan: **10 commits, approximately 761 KB, no leaks found**.
+- Gitleaks v8.30.0 repository-history and staged-change scans: **no leaks found**.
 - `.env`, virtual environments, caches, dependencies, build outputs, browser artifacts, and generated evidence are ignored by Git; `.env` and dependency caches are excluded from Docker contexts.
 - `git diff --check`: clean at the audited worktree stage. Repeat after final staging/commit.
 
@@ -32,6 +32,8 @@ This record reports executed checks. It is not a promise that defects cannot exi
 | Full Python hero workflow | Pass, 107.84 s on fresh stack |
 | Authenticated Chromium product workflow | Pass, 6.8 s |
 | Real-service login throttle | Pass, limit and `Retry-After` verified |
+| GitHub Actions `quality` | Pass, 1m04s on pinned Ubuntu 24.04 runner |
+| GitHub Actions `hero-e2e` | Pass, 4m04s on a disposable stack |
 
 The Chromium workflow covers Production Health, incident evidence, incident-to-regression review, representative trace transcript/timeline, datasets, release evidence, responsive health/auth states, sign-out/sign-in, deep-linked operational routes, command palette, and API-key modal focus behavior.
 
@@ -110,12 +112,10 @@ Known limits remain: trusted-host/single-owner model, best-effort free-text reda
 
 ## Release decision
 
-Ready for a **public source release candidate** after these final actions:
+The exact source candidate at `8d3f1b795f7d1aeeb1fb8fe4b1cce37897744295` passed both remote jobs in [GitHub Actions run 36322748409](https://github.com/DevChiniwala/ControlSurface/actions/runs/36322748409). It is ready for a **public source release candidate** after these product-release actions:
 
-1. Stage the exact intended files and repeat staged Gitleaks plus naming scans.
-2. Commit with Dev Chiniwala's configured identity and push.
-3. Require the remote `quality` and `hero-e2e` jobs to pass on that exact commit.
-4. Record a short real-product hero demo.
-5. Tag `v0.1.0-rc.1` only after the remote pipeline is green.
+1. Record the planned short real-product hero demo.
+2. Change repository visibility only when Dev Chiniwala is ready for public disclosure.
+3. Tag `v0.1.0-rc.1` from the verified source candidate after the public-release decision.
 
 Not approved by this audit: public Python package publication, public container publication, production HA claims, or hosted multi-tenant operation.
