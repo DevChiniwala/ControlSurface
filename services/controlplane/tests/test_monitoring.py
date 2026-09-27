@@ -70,6 +70,16 @@ def test_health_route_uses_real_tool_spans_and_open_incidents(
         seen.append(sql)
         if "FROM spans FINAL" in sql:
             return [{"agent_name": "refund", "tool_calls": 10, "successful_tool_calls": 8}]
+        if "observed_run_count" in sql:
+            return [
+                {
+                    "observed_run_count": 20,
+                    "failed_run_count": 0,
+                    "completion_rate": 1.0,
+                    "p95_latency_ms": 100,
+                    "recorded_cost_nano_usd": 200,
+                }
+            ]
         return [
             {
                 "agent_name": "refund",
@@ -107,5 +117,15 @@ def test_health_route_uses_real_tool_spans_and_open_incidents(
     assert agent["failed_tool_calls"] == 2
     assert agent["breaches"] == ["tool_success_rate"]
     assert result["open_incidents"] == 1
-    assert len(seen) == 2
+    assert result["summary"] == {
+        "agent_count": 1,
+        "healthy_agent_count": 0,
+        "observed_run_count": 20,
+        "failed_run_count": 0,
+        "completion_rate": 1.0,
+        "p95_latency_ms": 100,
+        "recorded_cost_nano_usd": 200,
+    }
+    assert len(seen) == 3
     assert "trace_summaries FINAL" in seen[1]
+    assert "quantileExactOrNull(0.95)(duration_ms)" in seen[2]

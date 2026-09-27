@@ -12,9 +12,9 @@ export type InspectedSpan = {
   end_ns: number;
   attributes: Attributes;
   events: Attributes[];
-  input_tokens: number;
-  output_tokens: number;
-  cost_nano_usd: number;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cost_nano_usd: number | null;
 };
 type Section = { id: string; label: string; value?: unknown };
 
@@ -214,16 +214,18 @@ export function SpanInspector({ span }: { span: InspectedSpan }) {
             </div>
             <div>
               <span>Input tokens</span>
-              <strong>{span.input_tokens.toLocaleString()}</strong>
+              <strong>{span.input_tokens?.toLocaleString() ?? "—"}</strong>
             </div>
             <div>
               <span>Output tokens</span>
-              <strong>{span.output_tokens.toLocaleString()}</strong>
+              <strong>{span.output_tokens?.toLocaleString() ?? "—"}</strong>
             </div>
             <div>
               <span>Cost</span>
               <strong>
-                ${(span.cost_nano_usd / 1_000_000_000).toFixed(4)}
+                {span.cost_nano_usd == null
+                  ? "—"
+                  : `$${(span.cost_nano_usd / 1_000_000_000).toFixed(4)}`}
               </strong>
             </div>
           </div>

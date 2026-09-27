@@ -338,8 +338,11 @@ def traces(
     rows = _query(
         settings,
         "SELECT trace_id, session_id, agent_name, agent_version, root_name, "
-        "start_time, duration_ms, span_count, error_count, input_tokens, output_tokens, "
-        "cost_nano_usd, status FROM trace_summaries FINAL "
+        "start_time, duration_ms, span_count, error_count, "
+        "nullIf(input_tokens, 0) AS input_tokens, "
+        "nullIf(output_tokens, 0) AS output_tokens, "
+        "nullIf(cost_nano_usd, 0) AS cost_nano_usd, status "
+        "FROM trace_summaries FINAL "
         "WHERE project_id = {project_id:UUID} "
         "AND ({agent:String} = '' OR agent_name = {agent:String}) "
         "AND ({filter_session:UInt8} = 0 OR session_id = {session:String}) "
@@ -371,8 +374,11 @@ def trace_detail(
     spans = _query(
         settings,
         "SELECT span_id, parent_span_id, name, start_ns, end_ns, status, operation, "
-        "session_id, agent_name, agent_version, tool_name, model_name, input_tokens, "
-        "output_tokens, cost_nano_usd, resource_json, scope_json, attributes_json, "
+        "session_id, agent_name, agent_version, tool_name, model_name, "
+        "nullIf(input_tokens, 0) AS input_tokens, "
+        "nullIf(output_tokens, 0) AS output_tokens, "
+        "nullIf(cost_nano_usd, 0) AS cost_nano_usd, "
+        "resource_json, scope_json, attributes_json, "
         "events_json, links_json, count() OVER () AS total_span_count FROM spans FINAL "
         "WHERE project_id = {project_id:UUID} AND trace_id = {trace_id:String} "
         "ORDER BY start_ns LIMIT 10000",
@@ -419,7 +425,10 @@ def sessions(
         _query(
             settings,
             "SELECT session_id, count() AS trace_count, max(start_time) AS last_seen, "
-            "sum(error_count) AS errors, sum(cost_nano_usd) AS cost_nano_usd "
+            "sum(error_count) AS errors, nullIf(sum(cost_nano_usd), 0) AS cost_nano_usd, "
+            "nullIf(sum(duration_ms), 0) AS duration_ms, "
+            "nullIf(sum(input_tokens), 0) AS input_tokens, "
+            "nullIf(sum(output_tokens), 0) AS output_tokens "
             "FROM trace_summaries FINAL WHERE project_id = {project_id:UUID} "
             "GROUP BY session_id ORDER BY last_seen DESC LIMIT 100",
             {"project_id": str(project_id)},
@@ -439,7 +448,10 @@ def session_detail(
     rows = _query(
         settings,
         "SELECT session_id, count() AS trace_count, max(start_time) AS last_seen, "
-        "sum(error_count) AS errors, sum(cost_nano_usd) AS cost_nano_usd "
+        "sum(error_count) AS errors, nullIf(sum(cost_nano_usd), 0) AS cost_nano_usd, "
+        "nullIf(sum(duration_ms), 0) AS duration_ms, "
+        "nullIf(sum(input_tokens), 0) AS input_tokens, "
+        "nullIf(sum(output_tokens), 0) AS output_tokens "
         "FROM trace_summaries FINAL WHERE project_id = {project_id:UUID} "
         "AND session_id = {session_id:String} GROUP BY session_id LIMIT 1",
         {"project_id": str(project_id), "session_id": session_id},
@@ -479,6 +491,17 @@ def production_health(
         "ON tool.trace_id = run.trace_id GROUP BY run.agent_name",
         {"project_id": str(project_id)},
     )
+    summary_rows = _query(
+        settings,
+        "SELECT count() AS observed_run_count, "
+        "countIf(status != 'success') AS failed_run_count, "
+        "if(count() = 0, NULL, countIf(status = 'success') / count()) AS completion_rate, "
+        "quantileExactOrNull(0.95)(duration_ms) AS p95_latency_ms, "
+        "sum(cost_nano_usd) AS recorded_cost_nano_usd "
+        "FROM trace_summaries FINAL WHERE project_id = {project_id:UUID} "
+        "AND start_time >= now() - interval 1 day",
+        {"project_id": str(project_id)},
+    )
     with postgres(settings) as connection:
         policies = cast(
             list[dict[str, Any]],
@@ -510,7 +533,8 @@ def production_health(
         row["failed_tool_calls"] = tool_calls - successful_tools
         row["completion_rate"] = completed / runs
         row["tool_success_rate"] = successful_tools / tool_calls if tool_calls else None
-        row["average_cost_nano_usd"] = round(int(row["cost_nano_usd"]) / runs)
+        total_cost = int(row["cost_nano_usd"])
+        row["average_cost_nano_usd"] = round(total_cost / runs) if total_cost else None
         row["open_incidents"] = open_for_agent
         if policy_data:
             metrics = SloMetrics(
@@ -530,8 +554,27 @@ def production_health(
         else:
             row["health"] = "incident" if open_for_agent else "no_policy"
             row["breaches"] = ()
+    summary = summary_rows[0] if summary_rows else {}
+    healthy_agents = sum(row["health"] == "healthy" for row in rows)
     return jsonable_encoder(
-        {"window_hours": 24, "agents": rows, "open_incidents": sum(incidents_by_agent.values())}
+        {
+            "window_hours": 24,
+            "agents": rows,
+            "open_incidents": sum(incidents_by_agent.values()),
+            "summary": {
+                "agent_count": len(rows),
+                "healthy_agent_count": healthy_agents,
+                "observed_run_count": int(summary.get("observed_run_count") or 0),
+                "failed_run_count": int(summary.get("failed_run_count") or 0),
+                "completion_rate": summary.get("completion_rate"),
+                "p95_latency_ms": summary.get("p95_latency_ms"),
+                "recorded_cost_nano_usd": (
+                    int(summary["recorded_cost_nano_usd"])
+                    if summary.get("recorded_cost_nano_usd")
+                    else None
+                ),
+            },
+        }
     )
 
 

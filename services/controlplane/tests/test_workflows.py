@@ -57,3 +57,78 @@ def test_regression_candidate_requires_review_and_preserves_source(monkeypatch):
     assert candidates[0]["expect"] == {"completion": True}
     assert candidates[0]["review_required"] is True
     assert candidates[0]["evidence"]["affected_runs"] == 428
+
+
+def test_incident_list_uses_stable_summary_shape(monkeypatch):
+    class Result:
+        def fetchall(self):
+            return [
+                {
+                    "id": "incident-1",
+                    "title": "Refund failures",
+                    "agent_name": "refund-agent",
+                    "affected_run_count": 42,
+                    "severity": "high",
+                    "status": "open",
+                    "started_at": datetime(2026, 1, 1, tzinfo=UTC),
+                    "top_evidence_type": "tool_schema",
+                    "top_evidence_subject": "payments.refund",
+                    "top_evidence_score": 0.91,
+                }
+            ]
+
+    class Connection:
+        def execute(self, sql, _args):
+            assert "affected_runs AS affected_run_count" in sql
+            assert "top_evidence_score" in sql
+            return Result()
+
+    class Context:
+        def __enter__(self):
+            return Connection()
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(workflows, "postgres", lambda _settings: Context())
+    rows = workflows.list_incidents(PROJECT, str(PROJECT), None)
+    assert rows[0]["affected_run_count"] == 42
+    assert rows[0]["top_evidence_subject"] == "payments.refund"
+
+
+def test_release_list_returns_compact_decision_summaries(monkeypatch):
+    class Result:
+        def fetchall(self):
+            return [
+                {
+                    "id": "release-1",
+                    "decision": "blocked",
+                    "candidate_version": "refund-agent@2",
+                    "baseline_version": "refund-agent@1",
+                    "quality_delta": 0.02,
+                    "cost_delta": -1000.0,
+                    "latency_delta": -20.0,
+                    "tool_accuracy_delta": -0.03,
+                    "failed_gate_count": 1,
+                    "evidence_hash": "abc",
+                    "created_at": datetime(2026, 1, 1, tzinfo=UTC),
+                }
+            ]
+
+    class Connection:
+        def execute(self, sql, _args):
+            assert "evidence_sha256 AS evidence_hash" in sql
+            assert "failed_gate_count" in sql
+            return Result()
+
+    class Context:
+        def __enter__(self):
+            return Connection()
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(workflows, "postgres", lambda _settings: Context())
+    rows = workflows.list_release_evidence(PROJECT, str(PROJECT), None)
+    assert rows[0]["decision"] == "blocked"
+    assert rows[0]["tool_accuracy_delta"] == -0.03

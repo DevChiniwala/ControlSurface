@@ -236,8 +236,14 @@ def list_incidents(
 ) -> list[dict[str, Any]]:
     with postgres(settings) as connection:
         rows = connection.execute(
-            "SELECT id, title, severity, status, cluster_signature, first_seen, last_seen, "
-            "affected_runs, created_at FROM incidents WHERE project_id = %s "
+            "SELECT id, title, agent_name, affected_runs AS affected_run_count, severity, "
+            "status, cluster_signature, first_seen AS started_at, last_seen, created_at, "
+            "evidence_json #>> '{root_cause_candidates,0,change_type}' "
+            "AS top_evidence_type, "
+            "evidence_json #>> '{root_cause_candidates,0,subject}' "
+            "AS top_evidence_subject, "
+            "(evidence_json #>> '{root_cause_candidates,0,evidence_score}')::double precision "
+            "AS top_evidence_score FROM incidents WHERE project_id = %s "
             "ORDER BY created_at DESC LIMIT 100",
             (project_id,),
         ).fetchall()
@@ -573,8 +579,20 @@ def list_release_evidence(
 ) -> list[dict[str, Any]]:
     with postgres(settings) as connection:
         rows = connection.execute(
-            "SELECT id, created_at, evidence_sha256, "
-            "bundle_json->'manifest' AS manifest, bundle_json->'decision' AS decision "
+            "SELECT id, created_at, evidence_sha256 AS evidence_hash, "
+            "CASE WHEN (bundle_json->'decision'->>'passed')::boolean "
+            "THEN 'passed' ELSE 'blocked' END AS decision, "
+            "bundle_json->'manifest'->>'candidate_version' AS candidate_version, "
+            "bundle_json->'manifest'->>'baseline_version' AS baseline_version, "
+            "(bundle_json->'decision'->>'quality_delta')::double precision AS quality_delta, "
+            "(bundle_json->'decision'->>'cost_delta_nano_usd')::double precision "
+            "AS cost_delta, "
+            "(bundle_json->'decision'->>'latency_delta_ms')::double precision "
+            "AS latency_delta, "
+            "((bundle_json->'decision'->>'candidate_tool_accuracy')::double precision - "
+            "(bundle_json->'decision'->>'baseline_tool_accuracy')::double precision) "
+            "AS tool_accuracy_delta, "
+            "jsonb_array_length(bundle_json->'decision'->'reasons') AS failed_gate_count "
             "FROM release_evidence WHERE project_id = %s "
             "ORDER BY created_at DESC LIMIT 100",
             (project_id,),

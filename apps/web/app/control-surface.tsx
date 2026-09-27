@@ -9,13 +9,33 @@ import {
   type DatasetRecord,
   type EvidenceBundle,
 } from "./inspector-panels";
-import { SpanInspector, type InspectedSpan } from "./span-inspector";
+import { SpanInspector } from "./span-inspector";
 import { ExecutionFlow } from "./execution-flow";
 import { SessionPanel, type SessionSummary } from "./session-panel";
 import { CommandPalette } from "./command-palette";
 import { usePanelFocus } from "./use-panel-focus";
 import { AuthVisual, MobileHealthPreview } from "./auth-visual";
 import { BrandIdentity, BrandMark } from "./brand";
+import { ProductionHealthView } from "./production-health";
+import { TracesView } from "./traces-view";
+import { FailureClustersView } from "./failure-clusters-view";
+import { ReleaseGatesView } from "./release-gates-view";
+import type {
+  Cluster,
+  Health,
+  Incident,
+  IncidentSummary,
+  OverviewData,
+  Project,
+  RecordValue,
+  RegressionCandidate,
+  RegressionReview,
+  ReleaseSummary,
+  SloViewData,
+  Span,
+  Trace,
+  TraceDetail,
+} from "./product-types";
 import {
   Activity,
   AlertTriangle,
@@ -43,97 +63,6 @@ import {
 
 const API = process.env.NEXT_PUBLIC_CONTROL_API || "http://localhost:8000";
 const MAX_TRACE_TREE_ROWS = 2_000;
-type RecordValue = Record<string, unknown>;
-type Project = { id: string; name: string; slug: string };
-type Trace = {
-  trace_id: string;
-  agent_name: string;
-  root_name: string;
-  start_time: string;
-  duration_ms: number;
-  span_count: number;
-  error_count: number;
-  cost_nano_usd: number;
-  status: string;
-  session_id: string;
-};
-type Span = InspectedSpan & {
-  parent_span_id: string;
-};
-type TraceDetail = {
-  trace_id: string;
-  spans: Span[];
-  total_span_count: number;
-  truncated: boolean;
-  graph: RecordValue | null;
-  features: RecordValue | null;
-};
-type AgentHealth = {
-  agent_name: string;
-  runs: number;
-  failed_runs: number;
-  completion_rate: number;
-  tool_success_rate: number | null;
-  tool_calls: number;
-  p95_latency_ms: number;
-  cost_nano_usd: number;
-  health: string;
-  breaches: string[];
-  last_seen: string;
-};
-type Health = {
-  window_hours: number;
-  agents: AgentHealth[];
-  open_incidents: number;
-};
-type OverviewData = Health & {
-  incidents: Incident[];
-  traces: Trace[];
-};
-type SloViewData = {
-  policies: RecordValue[];
-  health: Health;
-};
-type Cluster = {
-  signature: string;
-  count: number;
-  first_seen: string;
-  last_seen: string;
-  features: RecordValue;
-  representatives: { trace_id: string; run_id: string }[];
-};
-type Incident = {
-  id: string;
-  title: string;
-  severity: string;
-  status: string;
-  affected_runs: number;
-  created_at: string;
-  first_seen?: string;
-  last_seen?: string;
-  agent_name?: string;
-  evidence_json?: RecordValue;
-  cluster_signature: string;
-};
-type RegressionCandidate = {
-  name: string;
-  source_trace_id: string;
-  cluster_signature: string | null;
-  input: RecordValue;
-  expect: RecordValue;
-  review_required: boolean;
-  evidence?: RecordValue;
-};
-type RegressionReview = {
-  candidate: RegressionCandidate;
-  name: string;
-  input: string;
-  expect: string;
-  loading: boolean;
-  notice: string;
-  error: string;
-  saving: boolean;
-};
 type Page =
   | "health"
   | "traces"
@@ -327,8 +256,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 function date(value: string | undefined) {
   return value ? new Date(value).toLocaleString() : "—";
 }
-function usd(nano: number | undefined) {
-  return `$${((nano || 0) / 1_000_000_000).toFixed(4)}`;
+function usd(nano: number | undefined | null) {
+  return nano == null ? "—" : `$${(nano / 1_000_000_000).toFixed(4)}`;
 }
 function short(id: string | undefined, length = 10) {
   return id ? `${id.slice(0, length)}…` : "—";
@@ -382,50 +311,6 @@ function SectionHeading({
         <p>{description}</p>
       </div>
       {action}
-    </div>
-  );
-}
-
-function ClusterDistribution({ clusters }: { clusters: Cluster[] }) {
-  const total = clusters.reduce((sum, cluster) => sum + cluster.count, 0);
-  return (
-    <div className="panel cluster-distribution">
-      <div className="cluster-distribution-heading">
-        <div>
-          <span className="eyebrow">RECENT FAILURE PATTERNS</span>
-          <strong>{total.toLocaleString()} sampled failed runs</strong>
-        </div>
-        <span>
-          {clusters.length} distinct signatures · latest 2,000 failed runs
-        </span>
-      </div>
-      <div className="cluster-distribution-list">
-        {clusters.slice(0, 5).map((cluster) => {
-          const label = String(
-            cluster.features.failed_tool ||
-              cluster.features.error_type ||
-              "Agent execution failure",
-          );
-          const share = total ? (cluster.count / total) * 100 : 0;
-          return (
-            <div className="cluster-distribution-row" key={cluster.signature}>
-              <span title={label}>{label}</span>
-              <div
-                className="cluster-distribution-track"
-                role="meter"
-                aria-label={`${label} share of failed runs`}
-                aria-valuenow={Math.round(share)}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <span style={{ width: `${share}%` }} />
-              </div>
-              <strong>{share.toFixed(1)}%</strong>
-              <small>{cluster.count.toLocaleString()} runs</small>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -558,13 +443,15 @@ function SpanTree({
   detail,
   onClose,
   onCreateRegression,
+  embedded = false,
 }: {
   detail: TraceDetail;
   onClose: () => void;
   onCreateRegression: (trace: TraceDetail) => void;
+  embedded?: boolean;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-  const { closeRef, panelRef } = usePanelFocus(onClose);
+  const { closeRef, panelRef } = usePanelFocus(onClose, !embedded);
   const tree = useMemo(() => {
     const map = new Map<string, Span[]>();
     detail.spans.forEach((span) =>
@@ -611,12 +498,12 @@ function SpanTree({
   const current =
     detail.spans.find((span) => span.span_id === selected) || detail.spans[0];
   return (
-    <div className="detail-overlay">
+    <div className={`detail-overlay ${embedded ? "embedded" : ""}`}>
       <section
-        className="detail-panel"
+        className={`detail-panel ${embedded ? "trace-inline-inspector" : ""}`}
         ref={panelRef}
-        role="dialog"
-        aria-modal="true"
+        role={embedded ? "region" : "dialog"}
+        aria-modal={embedded ? undefined : true}
         aria-labelledby="trace-title"
       >
         <div className="detail-top">
@@ -653,7 +540,14 @@ function SpanTree({
               {detail.truncated ? " · first 10,000 shown" : ""}
             </span>
             <span>
-              {usd(detail.spans.reduce((sum, s) => sum + s.cost_nano_usd, 0))}
+              {usd(
+                detail.spans.some((span) => span.cost_nano_usd != null)
+                  ? detail.spans.reduce(
+                      (sum, span) => sum + (span.cost_nano_usd || 0),
+                      0,
+                    )
+                  : null,
+              )}
             </span>
           </div>
         </div>
@@ -828,7 +722,7 @@ export default function ControlSurfaceApp() {
         page === "health"
           ? await Promise.all([
               request<Health>(`${base}/health`),
-              request<Incident[]>(`${base}/incidents`),
+              request<IncidentSummary[]>(`${base}/incidents`),
               request<Trace[]>(`${base}/traces`),
             ]).then(([health, incidents, traces]) => ({
               ...health,
@@ -855,6 +749,11 @@ export default function ControlSurfaceApp() {
   function openTrace(id: string) {
     navigate("traces", id);
   }
+  const loadTraceDetail = useCallback(
+    (id: string) =>
+      request<TraceDetail>(`/api/projects/${projectId}/traces/${id}`),
+    [projectId],
+  );
   function openSession(session: SessionSummary) {
     setSelectedSession(session);
     setSessionRuns([]);
@@ -1321,339 +1220,40 @@ export default function ControlSurfaceApp() {
             </div>
           )}
           {page === "health" && (
-            <>
-              <SectionHeading
-                eyebrow="PRODUCTION / LAST 24 HOURS"
-                title="Production Health"
-                description="Your agents' operational status, grounded in observed runs."
-                action={
-                  <button
-                    className="button subtle"
-                    onClick={() => navigate("incidents")}
-                  >
-                    View incidents <ArrowRight size={15} />
-                  </button>
-                }
-              />
-              {loading ? (
-                <div className="skeleton-row" />
-              ) : (
-                (() => {
-                  const health = data as OverviewData | null;
-                  const agents = health?.agents || [];
-                  const incidents = (health?.incidents || []).filter(
-                    (item) => item.status !== "resolved",
-                  );
-                  const recentRuns = (health?.traces || []).slice(0, 6);
-                  const observedRuns = agents.reduce(
-                    (sum, agent) => sum + agent.runs,
-                    0,
-                  );
-                  const failedRuns = agents.reduce(
-                    (sum, agent) => sum + agent.failed_runs,
-                    0,
-                  );
-                  return (
-                    <>
-                      <div className="metric-strip">
-                        <div>
-                          <span>Agents healthy</span>
-                          <strong>
-                            {
-                              agents.filter((a) => a.health === "healthy")
-                                .length
-                            }
-                            <span className="metric-total">
-                              {" "}
-                              / {agents.length}
-                            </span>
-                          </strong>
-                          <small>Passing active SLOs</small>
-                        </div>
-                        <div>
-                          <span>Observed runs</span>
-                          <strong>{observedRuns.toLocaleString()}</strong>
-                          <small>Last {health?.window_hours ?? 24} hours</small>
-                        </div>
-                        <div>
-                          <span>Failed runs</span>
-                          <strong>{failedRuns.toLocaleString()}</strong>
-                          <small>
-                            {observedRuns
-                              ? `${((failedRuns / observedRuns) * 100).toFixed(1)}% of observed runs`
-                              : "No runs observed"}
-                          </small>
-                        </div>
-                        <div>
-                          <span>Open incidents</span>
-                          <strong>{health?.open_incidents ?? 0}</strong>
-                          <small>Needs investigation</small>
-                        </div>
-                      </div>
-                      <div className="overview-grid">
-                        <div className="panel">
-                          <div className="panel-heading">
-                            <div>
-                              <h2>Agent Health</h2>
-                              <p>
-                                Observed behavior and active SLO classification.
-                              </p>
-                            </div>
-                            <span className="panel-count">
-                              {agents.length} agents
-                            </span>
-                          </div>
-                          {agents.length ? (
-                            <table>
-                              <thead>
-                                <tr>
-                                  <th>Agent</th>
-                                  <th>State</th>
-                                  <th>Success</th>
-                                  <th>P95</th>
-                                  <th>Cost/run</th>
-                                  <th>Runs</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {agents.map((agent) => (
-                                  <tr key={agent.agent_name}>
-                                    <td className="strong">
-                                      {agent.agent_name || "Unnamed agent"}
-                                    </td>
-                                    <td>
-                                      <Badge value={agent.health} />
-                                    </td>
-                                    <td>
-                                      {agent.runs
-                                        ? `${(((agent.runs - agent.failed_runs) / agent.runs) * 100).toFixed(1)}%`
-                                        : "—"}
-                                    </td>
-                                    <td>{agent.p95_latency_ms} ms</td>
-                                    <td>
-                                      {usd(
-                                        agent.runs
-                                          ? agent.cost_nano_usd / agent.runs
-                                          : 0,
-                                      )}
-                                    </td>
-                                    <td>{agent.runs}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          ) : (
-                            <Empty
-                              title="No agent runs yet"
-                              description="Create an API key, instrument the Python example and run it to populate production health."
-                              action={
-                                <button
-                                  className="button subtle"
-                                  onClick={() => navigate("keys")}
-                                >
-                                  Set up an API key <ArrowRight size={15} />
-                                </button>
-                              }
-                            />
-                          )}
-                        </div>
-                        <div className="panel">
-                          <div className="panel-heading">
-                            <div>
-                              <h2>Active Incidents</h2>
-                              <p>What needs investigation now.</p>
-                            </div>
-                            <button
-                              className="text-button"
-                              onClick={() => navigate("incidents")}
-                            >
-                              View all
-                            </button>
-                          </div>
-                          {incidents.length ? (
-                            <div className="overview-incidents">
-                              {incidents.slice(0, 4).map((item) => (
-                                <button
-                                  key={item.id}
-                                  onClick={() => void openIncident(item.id)}
-                                >
-                                  <span className="overview-incident-top">
-                                    <span className="mono">
-                                      {short(item.id, 12)}
-                                    </span>
-                                    <Badge value={item.severity} />
-                                  </span>
-                                  <strong>{item.title}</strong>
-                                  <span>
-                                    {item.affected_runs.toLocaleString()}{" "}
-                                    affected runs · {date(item.created_at)}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          ) : (
-                            <Empty
-                              title="No active incidents"
-                              description="New incidents appear here when failed runs are grouped and investigated."
-                            />
-                          )}
-                        </div>
-                      </div>
-                      <div className="panel overview-runs">
-                        <div className="panel-heading">
-                          <div>
-                            <h2>Recent Agent Runs</h2>
-                            <p>
-                              Representative activity from the latest traces.
-                            </p>
-                          </div>
-                          <button
-                            className="text-button"
-                            onClick={() => navigate("traces")}
-                          >
-                            View traces
-                          </button>
-                        </div>
-                        {recentRuns.length ? (
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>Run</th>
-                                <th>Agent</th>
-                                <th>Status</th>
-                                <th>Duration</th>
-                                <th>Steps</th>
-                                <th>Cost</th>
-                                <th>Started</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {recentRuns.map((trace) => (
-                                <tr key={trace.trace_id}>
-                                  <td>
-                                    <button
-                                      className="text-button row-link strong"
-                                      onClick={() =>
-                                        void openTrace(trace.trace_id)
-                                      }
-                                    >
-                                      {trace.root_name}
-                                    </button>
-                                  </td>
-                                  <td>{trace.agent_name || "—"}</td>
-                                  <td>
-                                    <Badge value={trace.status} />
-                                  </td>
-                                  <td>{trace.duration_ms} ms</td>
-                                  <td>{trace.span_count}</td>
-                                  <td>{usd(trace.cost_nano_usd)}</td>
-                                  <td>{date(trace.start_time)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        ) : (
-                          <Empty
-                            title="No recent runs"
-                            description="Instrument an agent to see production activity here."
-                          />
-                        )}
-                      </div>
-                    </>
-                  );
-                })()
-              )}
-            </>
+            <ProductionHealthView
+              data={data as OverviewData | null}
+              loading={loading}
+              onOpenIncidents={() => navigate("incidents")}
+              onOpenIncident={openIncident}
+              onOpenTrace={openTrace}
+              onOpenTraces={() => navigate("traces")}
+              onOpenKeys={() => navigate("keys")}
+            />
           )}
           {page === "traces" && (
-            <>
-              <SectionHeading
-                eyebrow="OBSERVE / EXECUTION"
-                title="Traces"
-                description="Inspect every model call, tool, retrieval and agent step."
-                action={
-                  <button
-                    className="button subtle"
-                    onClick={() => void refresh()}
-                  >
-                    <RefreshCw size={15} /> Refresh
-                  </button>
-                }
-              />
-              <div className="toolbar">
-                <Search size={17} />
-                <input
-                  aria-label="Filter traces"
-                  placeholder="Filter by agent or trace ID"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-                <span>Latest 50</span>
-              </div>
-              <div className="panel table-panel">
-                {loading ? (
-                  <div className="skeleton-row" />
-                ) : (
-                  (() => {
-                    const traces = ((data as Trace[] | null) || []).filter(
-                      (t) =>
-                        `${t.agent_name} ${t.trace_id}`
-                          .toLowerCase()
-                          .includes(search.toLowerCase()),
-                    );
-                    return traces.length ? (
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Run</th>
-                            <th>State</th>
-                            <th>Agent</th>
-                            <th>Spans</th>
-                            <th>Duration</th>
-                            <th>Cost</th>
-                            <th>Started</th>
-                            <th />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {traces.map((trace) => (
-                            <tr key={trace.trace_id}>
-                              <td>
-                                <button
-                                  className="text-button row-link strong"
-                                  onClick={() => void openTrace(trace.trace_id)}
-                                >
-                                  {trace.root_name}
-                                </button>
-                                <span className="mono muted">
-                                  {short(trace.trace_id, 12)}
-                                </span>
-                              </td>
-                              <td>
-                                <Badge value={trace.status} />
-                              </td>
-                              <td>{trace.agent_name || "—"}</td>
-                              <td>{trace.span_count}</td>
-                              <td>{trace.duration_ms} ms</td>
-                              <td>{usd(trace.cost_nano_usd)}</td>
-                              <td>{date(trace.start_time)}</td>
-                              <td>
-                                <ChevronRight size={16} />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <Empty
-                        title="No traces found"
-                        description="Telemetry appears here after the SDK sends an agent run and the worker processes it."
-                      />
-                    );
-                  })()
-                )}
-              </div>
-            </>
+            <TracesView
+              traces={((data as Trace[] | null) || []).filter((trace) =>
+                `${trace.root_name} ${trace.agent_name} ${trace.trace_id}`
+                  .toLowerCase()
+                  .includes(search.toLowerCase()),
+              )}
+              loading={loading}
+              search={search}
+              onSearch={setSearch}
+              selectedTraceId={route.entityId}
+              onOpenTrace={openTrace}
+              onRefresh={() => void refresh()}
+              detailPanel={
+                detail ? (
+                  <SpanTree
+                    embedded
+                    detail={detail}
+                    onClose={() => navigate("traces")}
+                    onCreateRegression={createRegression}
+                  />
+                ) : undefined
+              }
+            />
           )}
           {page === "sessions" && (
             <>
@@ -1709,87 +1309,14 @@ export default function ControlSurfaceApp() {
             </>
           )}
           {page === "clusters" && (
-            <>
-              <SectionHeading
-                eyebrow="DIAGNOSE / PATTERNS"
-                title="Failure clusters"
-                description="Deterministic grouping by execution structure, tool sequence and error evidence."
-              />
-              {!loading && Boolean((data as Cluster[] | null)?.length) && (
-                <ClusterDistribution clusters={data as Cluster[]} />
-              )}
-              <div className="stack">
-                {loading ? (
-                  <div className="skeleton-row" />
-                ) : (data as Cluster[] | null)?.length ? (
-                  (data as Cluster[]).map((cluster) => (
-                    <div className="panel cluster" key={cluster.signature}>
-                      <div className="cluster-top">
-                        <div>
-                          <span className="eyebrow">
-                            SIGNATURE {short(cluster.signature, 12)}
-                          </span>
-                          <h2>
-                            {String(
-                              cluster.features.failed_tool ||
-                                cluster.features.error_type ||
-                                "Agent execution failure",
-                            )}
-                          </h2>
-                          <p>
-                            {cluster.count} affected runs · First seen{" "}
-                            {date(cluster.first_seen)}
-                          </p>
-                        </div>
-                        <div className="cluster-actions">
-                          <span className="count-pill">
-                            {cluster.count} runs
-                          </span>
-                          <button
-                            className="button primary"
-                            onClick={() => void analyze(cluster.signature)}
-                          >
-                            Create incident <ArrowRight size={15} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="cluster-evidence">
-                        <span>
-                          Tool sequence:{" "}
-                          {Array.isArray(cluster.features.tool_sequence)
-                            ? cluster.features.tool_sequence.join(" → ") ||
-                              "none"
-                            : "none"}
-                        </span>
-                        <span>
-                          Retries: {String(cluster.features.retry_count || 0)}
-                        </span>
-                        <span>
-                          Representatives: {cluster.representatives.length}
-                        </span>
-                      </div>
-                      <div className="representatives">
-                        {cluster.representatives.map((r) => (
-                          <button
-                            key={r.trace_id}
-                            onClick={() => void openTrace(r.trace_id)}
-                          >
-                            Representative run{" "}
-                            <span className="mono">{short(r.trace_id)}</span>
-                            <ChevronRight size={15} />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <Empty
-                    title="No failures to cluster"
-                    description="Failed agent runs will be grouped here as telemetry arrives."
-                  />
-                )}
-              </div>
-            </>
+            <FailureClustersView
+              clusters={data as Cluster[] | null}
+              loading={loading}
+              onAnalyze={() => void refresh()}
+              onCreateIncident={(signature) => void analyze(signature)}
+              onOpenTrace={openTrace}
+              loadTrace={loadTraceDetail}
+            />
           )}
           {page === "incidents" && (
             <>
@@ -1801,20 +1328,22 @@ export default function ControlSurfaceApp() {
               <div className="panel table-panel">
                 {loading ? (
                   <div className="skeleton-row" />
-                ) : (data as Incident[] | null)?.length ? (
+                ) : (data as IncidentSummary[] | null)?.length ? (
                   <table>
                     <thead>
                       <tr>
                         <th>Incident</th>
                         <th>Severity</th>
+                        <th>Agent</th>
                         <th>Status</th>
                         <th>Affected runs</th>
-                        <th>Created</th>
+                        <th>Top evidence</th>
+                        <th>Started</th>
                         <th />
                       </tr>
                     </thead>
                     <tbody>
-                      {(data as Incident[]).map((item) => (
+                      {(data as IncidentSummary[]).map((item) => (
                         <tr key={item.id}>
                           <td>
                             <button
@@ -1828,11 +1357,27 @@ export default function ControlSurfaceApp() {
                           <td>
                             <Badge value={item.severity} />
                           </td>
+                          <td>{item.agent_name || "—"}</td>
                           <td>
                             <Badge value={item.status} />
                           </td>
-                          <td>{item.affected_runs}</td>
-                          <td>{date(item.created_at)}</td>
+                          <td>{item.affected_run_count.toLocaleString()}</td>
+                          <td>
+                            {item.top_evidence_subject ? (
+                              <span className="evidence-summary">
+                                <strong>{item.top_evidence_subject}</strong>
+                                <small>
+                                  {item.top_evidence_type || "change"}
+                                  {item.top_evidence_score == null
+                                    ? ""
+                                    : ` · ${item.top_evidence_score.toFixed(2)}`}
+                                </small>
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td>{date(item.started_at)}</td>
                           <td>
                             <ChevronRight size={16} />
                           </td>
@@ -2029,79 +1574,21 @@ export default function ControlSurfaceApp() {
             </>
           )}
           {page === "release" && (
-            <>
-              <SectionHeading
-                eyebrow="SHIP / DECISIONS"
-                title="Release Gates"
-                description="Frozen gate inputs, results and reasons produced by the CLI."
-              />
-              <div className="panel table-panel">
-                {loading ? (
-                  <div className="skeleton-row" />
-                ) : (data as RecordValue[] | null)?.length ? (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Decision</th>
-                        <th>Candidate</th>
-                        <th>Baseline</th>
-                        <th>Reasons</th>
-                        <th>Evidence hash</th>
-                        <th>Created</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data as RecordValue[]).map((item) => {
-                        const decision = item.decision as RecordValue;
-                        const manifest = item.manifest as RecordValue;
-                        return (
-                          <tr key={String(item.id)}>
-                            <td>
-                              <Badge
-                                value={decision.passed ? "passed" : "blocked"}
-                              />
-                            </td>
-                            <td>
-                              <button
-                                className="text-button row-link strong release-version"
-                                title={String(manifest.candidate_version)}
-                                onClick={() =>
-                                  void openReleaseEvidence(String(item.id))
-                                }
-                              >
-                                {String(manifest.candidate_version)}
-                              </button>
-                            </td>
-                            <td className="mono muted">
-                              <span
-                                className="release-version"
-                                title={String(manifest.baseline_version)}
-                              >
-                                {String(manifest.baseline_version)}
-                              </span>
-                            </td>
-                            <td>
-                              {Array.isArray(decision.reasons)
-                                ? decision.reasons.join(", ") || "No violations"
-                                : "—"}
-                            </td>
-                            <td className="mono muted">
-                              {short(String(item.evidence_sha256), 16)}
-                            </td>
-                            <td>{date(String(item.created_at))}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                ) : (
-                  <Empty
-                    title="No release decisions"
-                    description="Run controlsurface gate against paired local evaluation results to create immutable evidence."
+            <ReleaseGatesView
+              releases={data as ReleaseSummary[] | null}
+              loading={loading}
+              selectedId={route.entityId}
+              onSelect={openReleaseEvidence}
+              detailPanel={
+                releaseEvidence ? (
+                  <EvidencePanel
+                    embedded
+                    bundle={releaseEvidence}
+                    onClose={() => navigate("release")}
                   />
-                )}
-              </div>
-            </>
+                ) : undefined
+              }
+            />
           )}
           {page === "slos" && (
             <>
@@ -2339,13 +1826,6 @@ export default function ControlSurfaceApp() {
           }}
         />
       )}
-      {detail && (
-        <SpanTree
-          detail={detail}
-          onClose={() => navigate("traces")}
-          onCreateRegression={createRegression}
-        />
-      )}
       {dataset && (
         <DatasetPanel
           dataset={dataset}
@@ -2353,12 +1833,6 @@ export default function ControlSurfaceApp() {
           saveItem={saveDatasetItem}
           onSaved={() => void refresh()}
           onClose={() => setDataset(null)}
-        />
-      )}
-      {releaseEvidence && (
-        <EvidencePanel
-          bundle={releaseEvidence}
-          onClose={() => navigate("release")}
         />
       )}
       {incident && (

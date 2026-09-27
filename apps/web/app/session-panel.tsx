@@ -8,7 +8,10 @@ export type SessionSummary = {
   session_id: string;
   trace_count: number;
   errors: number;
-  cost_nano_usd: number;
+  duration_ms?: number | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cost_nano_usd: number | null;
   last_seen: string;
 };
 
@@ -17,14 +20,14 @@ export type SessionRun = {
   root_name: string;
   agent_name: string;
   status: string;
-  duration_ms: number;
+  duration_ms: number | null;
   span_count: number;
-  cost_nano_usd: number;
+  cost_nano_usd: number | null;
   start_time: string;
 };
 
-function money(nano: number) {
-  return `$${(nano / 1_000_000_000).toFixed(4)}`;
+function money(nano: number | null) {
+  return nano == null ? "—" : `$${(nano / 1_000_000_000).toFixed(4)}`;
 }
 
 export function SessionPanel({
@@ -140,7 +143,11 @@ export function SessionPanel({
                           {run.status}
                         </span>
                       </td>
-                      <td>{run.duration_ms} ms</td>
+                      <td>
+                        {run.duration_ms == null
+                          ? "—"
+                          : `${run.duration_ms} ms`}
+                      </td>
                       <td>{run.span_count}</td>
                       <td>{money(run.cost_nano_usd)}</td>
                       <td>{new Date(run.start_time).toLocaleString()}</td>

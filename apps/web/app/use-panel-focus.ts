@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-export function usePanelFocus(onClose: () => void) {
+export function usePanelFocus(onClose: () => void, active = true) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const callback = useRef(onClose);
@@ -10,6 +10,7 @@ export function usePanelFocus(onClose: () => void) {
     callback.current = onClose;
   }, [onClose]);
   useEffect(() => {
+    if (!active) return;
     const previous =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -42,6 +43,6 @@ export function usePanelFocus(onClose: () => void) {
       document.removeEventListener("keydown", keydown);
       previous?.focus();
     };
-  }, []);
+  }, [active]);
   return { closeRef, panelRef };
 }

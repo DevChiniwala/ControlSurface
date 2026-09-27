@@ -22,9 +22,9 @@ export function BrandMark({ className = "" }: { className?: string }) {
           y2="111"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stopColor="#55C2FF" />
-          <stop offset="0.48" stopColor="#4F6BFF" />
-          <stop offset="1" stopColor="#7657FF" />
+          <stop stopColor="#35C2FF" />
+          <stop offset="0.55" stopColor="#247CFF" />
+          <stop offset="1" stopColor="#4F6FFF" />
         </linearGradient>
       </defs>
       <path

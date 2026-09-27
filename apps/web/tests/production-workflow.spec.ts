@@ -6,14 +6,20 @@ test.skip(
 );
 
 const api = process.env.CONTROLSURFACE_API_URL || "http://localhost:8000";
+const ownerEmail =
+  process.env.CONTROLSURFACE_BROWSER_OWNER_EMAIL || "ci-owner@example.invalid";
+const ownerPassword =
+  process.env.CONTROLSURFACE_BROWSER_OWNER_PASSWORD ||
+  "disposable-ci-password-only";
 
 test("production health to incident evidence, run, dataset, and release decision", async ({
   page,
 }, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
   const login = await page.request.post(`${api}/api/login`, {
     data: {
-      email: "ci-owner@example.invalid",
-      password: "disposable-ci-password-only",
+      email: ownerEmail,
+      password: ownerPassword,
     },
   });
   expect(login.status()).toBe(200);
@@ -68,6 +74,7 @@ test("production health to incident evidence, run, dataset, and release decision
   await expect(
     page.getByRole("heading", { name: "Datasets", exact: true }),
   ).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("view-datasets.png") });
   await page.getByRole("button", { name: "Refund scenarios" }).click();
   const dataset = page.getByRole("dialog", { name: "Refund scenarios" });
   await expect(dataset.getByText("SCENARIO 1", { exact: true })).toBeVisible();
@@ -90,9 +97,9 @@ test("production health to incident evidence, run, dataset, and release decision
   await expect(
     page.getByRole("heading", { name: "Release Gates" }),
   ).toBeVisible();
-  await page.locator(".table-panel tbody button").first().click();
+  await page.locator(".release-list-panel tbody .run-cell").first().click();
   await expect(page).toHaveURL(/\/releases\/[0-9a-f-]+$/);
-  const evidence = page.getByRole("dialog", { name: /refund-agent@/ });
+  const evidence = page.getByRole("region", { name: /refund-agent@/ });
   await expect(evidence.locator(".gate-decision")).toBeVisible();
   await expect(evidence.getByText("CONTENT SHA-256")).toBeVisible();
   await expect(evidence.getByText("Regressed cases")).toBeVisible();
@@ -137,8 +144,8 @@ test("production health to incident evidence, run, dataset, and release decision
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
-  await page.getByLabel("Email").fill("ci-owner@example.invalid");
-  await page.getByLabel("Password").fill("disposable-ci-password-only");
+  await page.getByLabel("Email").fill(ownerEmail);
+  await page.getByLabel("Password").fill(ownerPassword);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(
     page.getByRole("heading", { name: "Production Health" }),
@@ -147,7 +154,7 @@ test("production health to incident evidence, run, dataset, and release decision
   for (const [navigationLabel, heading] of [
     ["Traces", "Traces"],
     ["Sessions", "Sessions"],
-    ["Failure Clusters", "Failure clusters"],
+    ["Failure Clusters", "Failure Clusters"],
     ["Change Ledger", "Change ledger"],
     ["Regression Cases", "Regression cases"],
     ["SLOs", "SLOs"],
@@ -172,8 +179,8 @@ test("production health to incident evidence, run, dataset, and release decision
       await session.getByRole("button", { name: "Close session" }).click();
     }
     if (navigationLabel === "Failure Clusters") {
-      await expect(page.locator(".cluster-distribution")).toContainText(
-        "sampled failed runs",
+      await expect(page.locator(".cluster-summary-grid")).toContainText(
+        "Sampled failed runs",
       );
     }
     if (navigationLabel === "SLOs") {

@@ -204,22 +204,24 @@ export function DatasetPanel({
 export function EvidencePanel({
   bundle,
   onClose,
+  embedded = false,
 }: {
   bundle: EvidenceBundle;
   onClose: () => void;
+  embedded?: boolean;
 }) {
-  const { closeRef, panelRef } = usePanelFocus(onClose);
+  const { closeRef, panelRef } = usePanelFocus(onClose, !embedded);
   const { manifest, policy, decision } = bundle;
   const baseline = new Map(
     bundle.baseline_results.map((item) => [String(item.case_id), item]),
   );
   return (
-    <div className="detail-overlay">
+    <div className={`detail-overlay ${embedded ? "embedded" : ""}`}>
       <section
         ref={panelRef}
-        className="detail-panel inspector-panel"
-        role="dialog"
-        aria-modal="true"
+        className={`detail-panel inspector-panel ${embedded ? "release-inline-inspector" : ""}`}
+        role={embedded ? "region" : "dialog"}
+        aria-modal={embedded ? undefined : true}
         aria-labelledby="evidence-title"
       >
         <div className="detail-top">
