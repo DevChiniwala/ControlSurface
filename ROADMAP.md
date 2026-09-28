@@ -26,9 +26,8 @@ Remaining release work is intentionally narrow:
 
 1. Run GitHub Actions on the exact candidate commit in the remote repository.
 2. Review the final staged diff and repeat secret/naming scans after staging.
-3. Capture a concise real-product hero demo from the synthetic refund workflow.
-4. Complete artifact-specific license/SBOM review before publishing Python or container artifacts.
-5. Tag `v0.1.0-rc.1` only after the remote pipeline is green.
+3. Complete artifact-specific license/SBOM review before publishing Python or container artifacts.
+4. Tag `v0.1.0-rc.1` only after the exact remote candidate is green and the final launch review is approved.
 
 ## v0.2: always-on reliability automation
 

@@ -24,6 +24,16 @@
   <img src="docs/assets/readme/hero-banner.png" width="100%" alt="ControlSurface — ship reliable AI agents with production health, traces, incident intelligence, and release gates">
 </p>
 
+<p align="center">
+  <a href="https://github.com/DevChiniwala/ControlSurface/releases/download/v0.1.0-rc.1/controlsurface-v0.1.0-rc.1-demo.mp4">
+    <img src="docs/assets/readme/hero-demo.gif" width="100%" alt="ControlSurface real-product workflow from Production Health to a passing release gate">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/DevChiniwala/ControlSurface/releases/download/v0.1.0-rc.1/controlsurface-v0.1.0-rc.1-demo.mp4"><strong>Watch the complete 70-second failure-to-release workflow</strong></a>
+</p>
+
 ## Production failures should make your system smarter.
 
 **Traces tell you what happened. ControlSurface helps you decide what to do next.**
@@ -109,14 +119,6 @@ Group recurring production failures by execution signature and open a representa
     </td>
   </tr>
 </table>
-
-<details>
-<summary><strong>Watch the 12-second real-product walkthrough</strong></summary>
-<br>
-<p align="center">
-  <img src="docs/assets/readme/hero-demo.gif" width="100%" alt="ControlSurface production health to verified release walkthrough">
-</p>
-</details>
 
 ## What ControlSurface does
 
