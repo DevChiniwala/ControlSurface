@@ -57,19 +57,24 @@ def api(path: str, method: str = "GET", body: dict[str, Any] | None = None) -> A
         return json.load(response)
 
 
-def wait_for_failure_cluster(timeout_seconds: int = 45) -> dict[str, Any]:
+def refund_failure_cluster() -> dict[str, Any] | None:
+    return next(
+        (
+            item
+            for item in api("clusters")
+            if item["features"].get("failed_tool") == "payments.refund"
+        ),
+        None,
+    )
+
+
+def wait_for_failure_cluster(
+    minimum_count: int = 3, timeout_seconds: int = 45
+) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        clusters = api("clusters")
-        match = next(
-            (
-                item
-                for item in clusters
-                if item["features"].get("failed_tool") == "payments.refund"
-            ),
-            None,
-        )
-        if match and match["count"] >= 3:
+        match = refund_failure_cluster()
+        if match and match["count"] >= minimum_count:
             return match
         time.sleep(1)
     raise RuntimeError("Failure cluster did not appear before timeout")
@@ -130,6 +135,8 @@ def main() -> None:
         {"tool_name": "payments.refund", "version": "1.9.0", "schema_json": SCHEMA_V2},
     )
     print(f"Registered tool schema change: {change['change']['compatibility']}")
+    existing_cluster = refund_failure_cluster()
+    existing_failure_count = int(existing_cluster["count"]) if existing_cluster else 0
     broken = RefundAgent(model, PaymentTool(2), client, agent_version=1)
     for index in range(args.runs):
         with client.session(f"broken-{index}"):
@@ -137,7 +144,7 @@ def main() -> None:
     client.provider.force_flush()
     print(f"Emitted {args.runs} schema-incompatible runs")
 
-    cluster = wait_for_failure_cluster()
+    cluster = wait_for_failure_cluster(existing_failure_count + args.runs)
     print(f"Failure cluster {cluster['signature']}: {cluster['count']} runs")
     incident = api(
         "incidents/analyze",
