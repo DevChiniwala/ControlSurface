@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 150" role="img" aria-labelledby="title desc">
+  <title id="title">ControlSurface</title>
+  <desc id="desc">ControlSurface wordmark for light backgrounds.</desc>
+  <defs>
+    <linearGradient id="flow" x1="53" y1="40" x2="125" y2="111" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#35C2FF"/>
+      <stop offset="0.56" stop-color="#247CFF"/>
+      <stop offset="1" stop-color="#4F6FFF"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(10 9) scale(.86)">
+    <path fill="#0B1424" d="M139 6H70C31 6 7 32 7 68c0 35 25 58 62 58h5c15 0 24-3 34-12l18-16c8-7 3-20-8-20H69c-17 0-27-10-27-25 0-16 12-27 29-27h11c9 0 15-2 21-8L139 6Z"/>
+    <path fill="url(#flow)" d="M82 46c14-15 28-22 45-19 21 3 33 21 33 45 0 25-15 46-35 55 9-25 4-44-18-47H67c-14 0-20-13-11-24l26-10Z"/>
+  </g>
+  <text x="162" y="99" fill="#0B1424" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="67" font-weight="720" letter-spacing="-3">Control<tspan fill="#52627A">Surface</tspan></text>
+</svg>

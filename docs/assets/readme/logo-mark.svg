@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-labelledby="title desc">
+  <title id="title">ControlSurface logo mark</title>
+  <desc id="desc">A geometric control-shaped mark with a blue and cyan inner flow.</desc>
+  <defs>
+    <linearGradient id="flow" x1="68" y1="51" x2="157" y2="137" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#35C2FF"/>
+      <stop offset="0.56" stop-color="#247CFF"/>
+      <stop offset="1" stop-color="#4F6FFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="42" fill="#050912"/>
+  <path fill="#F7F9FC" d="M160 30H88c-41 0-66 27-66 65 0 37 26 61 65 61h5c16 0 25-3 36-13l19-17c8-7 3-21-9-21H87c-18 0-28-10-28-26 0-17 12-28 30-28h12c9 0 16-2 22-8l37-13Z"/>
+  <path fill="url(#flow)" d="M101 72c15-16 29-23 47-20 22 3 35 22 35 47 0 27-16 49-37 58 9-26 4-46-19-49H85c-14 0-21-14-11-25l27-11Z"/>
+</svg>

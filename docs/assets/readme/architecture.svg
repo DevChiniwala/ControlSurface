@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 560" role="img" aria-labelledby="title desc">
+  <title id="title">ControlSurface architecture</title>
+  <desc id="desc">Python SDK and OTLP clients send telemetry to ingest, which durably acknowledges compressed batches in PostgreSQL. A worker projects spans and AgentRunGraph data into ClickHouse. The API serves the web application and CLI using both stores.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0l10 5-10 5Z" fill="#456B9D"/></marker>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#35C2FF"/><stop offset="1" stop-color="#247CFF"/></linearGradient>
+  </defs>
+  <rect width="1400" height="560" rx="20" fill="#050912"/>
+  <g font-family="system-ui,-apple-system,Segoe UI,sans-serif">
+    <text x="58" y="52" fill="#F7F9FC" font-size="22" font-weight="700">An explicit durable boundary between agents and analytics</text>
+    <text x="58" y="78" fill="#7F8DA4" font-size="13">Ingestion acknowledges bounded compressed batches; projection and reliability analysis happen off the application path.</text>
+
+    <text x="58" y="126" fill="#35C2FF" font-size="11" font-weight="700" letter-spacing="1.5">TELEMETRY PLANE</text>
+    <g transform="translate(58 150)"><rect width="210" height="88" rx="10" fill="#0B1424" stroke="#253B5A"/><text x="20" y="32" fill="#F7F9FC" font-size="15" font-weight="700">Python SDK / OTLP</text><text x="20" y="57" fill="#8F9DB3" font-size="12">HTTP + gRPC clients</text></g>
+    <path d="M280 194H348" stroke="url(#edge)" stroke-width="2" marker-end="url(#arrow)"/>
+    <g transform="translate(364 150)"><rect width="170" height="88" rx="10" fill="#10203A" stroke="#247CFF"/><text x="20" y="32" fill="#F7F9FC" font-size="15" font-weight="700">Ingest</text><text x="20" y="57" fill="#8F9DB3" font-size="12">Auth · bounds · redact</text></g>
+    <path d="M546 194H614" stroke="url(#edge)" stroke-width="2" marker-end="url(#arrow)"/>
+    <g transform="translate(630 138)"><rect width="250" height="112" rx="10" fill="#0B1424" stroke="#2F5D99"/><text x="20" y="31" fill="#35C2FF" font-size="11" font-weight="700" letter-spacing="1.2">POSTGRESQL INBOX</text><text x="20" y="61" fill="#F7F9FC" font-size="15" font-weight="700">Durable acknowledgement</text><text x="20" y="86" fill="#8F9DB3" font-size="12">Compressed OTLP batches · retries</text></g>
+    <path d="M892 194H960" stroke="url(#edge)" stroke-width="2" marker-end="url(#arrow)"/>
+    <g transform="translate(976 150)"><rect width="170" height="88" rx="10" fill="#10203A" stroke="#247CFF"/><text x="20" y="32" fill="#F7F9FC" font-size="15" font-weight="700">Worker</text><text x="20" y="57" fill="#8F9DB3" font-size="12">Async projections</text></g>
+    <path d="M1158 194H1208" stroke="url(#edge)" stroke-width="2" marker-end="url(#arrow)"/>
+    <g transform="translate(1224 128)"><rect width="120" height="132" rx="10" fill="#0B1424" stroke="#2F5D99"/><text x="18" y="31" fill="#35C2FF" font-size="11" font-weight="700">CLICKHOUSE</text><text x="18" y="61" fill="#DCE7F8" font-size="12">Source spans</text><text x="18" y="83" fill="#DCE7F8" font-size="12">Summaries</text><text x="18" y="105" fill="#DCE7F8" font-size="12">AgentRunGraph</text></g>
+
+    <path d="M1284 272v86H890" stroke="#456B9D" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <path d="M754 262v96h64" stroke="#456B9D" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <text x="58" y="338" fill="#35C2FF" font-size="11" font-weight="700" letter-spacing="1.5">CONTROL PLANE</text>
+    <g transform="translate(818 320)"><rect width="230" height="100" rx="10" fill="#10203A" stroke="#247CFF"/><text x="22" y="36" fill="#F7F9FC" font-size="16" font-weight="700">Control API</text><text x="22" y="62" fill="#8F9DB3" font-size="12">Project-scoped read models</text><text x="22" y="82" fill="#8F9DB3" font-size="12">Incidents · gates · datasets</text></g>
+    <g transform="translate(430 320)"><rect width="278" height="100" rx="10" fill="#0B1424" stroke="#253B5A"/><text x="20" y="31" fill="#35C2FF" font-size="11" font-weight="700" letter-spacing="1.2">POSTGRESQL METADATA</text><text x="20" y="60" fill="#DCE7F8" font-size="12">Projects · keys · SLOs · changes</text><text x="20" y="81" fill="#DCE7F8" font-size="12">Incidents · regressions · release evidence</text></g>
+    <path d="M720 370H806" stroke="#456B9D" stroke-width="2" marker-end="url(#arrow)"/>
+    <path d="M818 382H702" stroke="#456B9D" stroke-width="2" marker-end="url(#arrow)" opacity=".45"/>
+
+    <text x="58" y="472" fill="#35C2FF" font-size="11" font-weight="700" letter-spacing="1.5">EXPERIENCE</text>
+    <g transform="translate(818 448)"><rect width="230" height="70" rx="10" fill="#112445" stroke="#247CFF"/><text x="115" y="42" text-anchor="middle" fill="#F7F9FC" font-size="15" font-weight="700">Next.js web console</text></g>
+    <g transform="translate(1100 448)"><rect width="180" height="70" rx="10" fill="#0B1424" stroke="#253B5A"/><text x="90" y="42" text-anchor="middle" fill="#F7F9FC" font-size="15" font-weight="700">Python CLI</text></g>
+    <path d="M933 432v-12" stroke="#456B9D" stroke-width="2" marker-end="url(#arrow)"/>
+    <path d="M1190 448v-62h-130" stroke="#456B9D" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <rect x="58" y="386" width="286" height="69" rx="9" fill="#08111F" stroke="#1D304A"/><text x="76" y="413" fill="#A8B4C8" font-size="12">PostgreSQL owns control-plane state.</text><text x="76" y="435" fill="#A8B4C8" font-size="12">ClickHouse owns telemetry projections.</text>
+  </g>
+</svg>

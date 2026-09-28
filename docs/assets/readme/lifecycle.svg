@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 210" role="img" aria-labelledby="title desc">
+  <title id="title">ControlSurface reliability lifecycle</title>
+  <desc id="desc">Observe, evaluate, monitor, diagnose, improve, and ship in one continuous engineering loop.</desc>
+  <defs>
+    <linearGradient id="rail" x1="150" y1="0" x2="1290" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#35C2FF"/><stop offset=".55" stop-color="#247CFF"/><stop offset="1" stop-color="#4F6FFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1440" height="210" rx="20" fill="#050912"/>
+  <path d="M122 105H1318" stroke="#21334F" stroke-width="2"/>
+  <path d="M122 105H1318" stroke="url(#rail)" stroke-width="2" stroke-dasharray="4 14"/>
+  <g font-family="system-ui,-apple-system,Segoe UI,sans-serif" text-anchor="middle">
+    <g transform="translate(120)"><circle cx="0" cy="105" r="29" fill="#0E192B" stroke="#35C2FF"/><path d="M-11 105c6-11 16-11 22 0-6 11-16 11-22 0Z" fill="none" stroke="#73B6FF" stroke-width="2"/><circle cy="105" r="4" fill="#35C2FF"/><text y="52" fill="#F7F9FC" font-size="15" font-weight="700">OBSERVE</text><text y="169" fill="#7E8CA3" font-size="12">Runs and context</text></g>
+    <g transform="translate(360)"><circle cx="0" cy="105" r="29" fill="#0E192B" stroke="#247CFF"/><path d="M-12 115h24M-8 115l7-21 7 21" fill="none" stroke="#73B6FF" stroke-width="2"/><text y="52" fill="#F7F9FC" font-size="15" font-weight="700">EVALUATE</text><text y="169" fill="#7E8CA3" font-size="12">Quality and behavior</text></g>
+    <g transform="translate(600)"><circle cx="0" cy="105" r="29" fill="#0E192B" stroke="#247CFF"/><path d="M-14 108l8-8 7 5 13-14" fill="none" stroke="#73B6FF" stroke-width="2"/><circle cx="14" cy="91" r="3" fill="#35C2FF"/><text y="52" fill="#F7F9FC" font-size="15" font-weight="700">MONITOR</text><text y="169" fill="#7E8CA3" font-size="12">SLO-backed health</text></g>
+    <g transform="translate(840)"><circle cx="0" cy="105" r="29" fill="#0E192B" stroke="#247CFF"/><circle cy="102" r="10" fill="none" stroke="#73B6FF" stroke-width="2"/><path d="M8 110l9 9" stroke="#35C2FF" stroke-width="3"/><text y="52" fill="#F7F9FC" font-size="15" font-weight="700">DIAGNOSE</text><text y="169" fill="#7E8CA3" font-size="12">Clusters and evidence</text></g>
+    <g transform="translate(1080)"><circle cx="0" cy="105" r="29" fill="#0E192B" stroke="#247CFF"/><path d="M-12 96h24v18h-24zM-6 96v-6h12v6" fill="none" stroke="#73B6FF" stroke-width="2"/><text y="52" fill="#F7F9FC" font-size="15" font-weight="700">IMPROVE</text><text y="169" fill="#7E8CA3" font-size="12">Production regressions</text></g>
+    <g transform="translate(1320)"><circle cx="0" cy="105" r="29" fill="#112445" stroke="#247CFF"/><path d="M-11 111l7-18 17-7-7 17-17 8Z" fill="none" stroke="#F7F9FC" stroke-width="2"/><path d="M-3 104l8-8" stroke="#35C2FF" stroke-width="2"/><text y="52" fill="#F7F9FC" font-size="15" font-weight="700">SHIP</text><text y="169" fill="#7E8CA3" font-size="12">Evidence-backed gates</text></g>
+  </g>
+</svg>

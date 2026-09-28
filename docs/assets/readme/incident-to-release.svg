@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 430" role="img" aria-labelledby="title desc">
+  <title id="title">From production failure to verified release</title>
+  <desc id="desc">A production run becomes a failure cluster, incident, ranked change evidence, regression case, candidate evaluation, and a release gate that either ships or blocks.</desc>
+  <defs>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#12274A"/><stop offset="1" stop-color="#0B1424"/></linearGradient>
+    <linearGradient id="active" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#35C2FF"/><stop offset="1" stop-color="#247CFF"/></linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0l10 5-10 5Z" fill="#476A9E"/></marker>
+  </defs>
+  <rect width="1440" height="430" rx="20" fill="#050912"/>
+  <text x="64" y="52" fill="#F7F9FC" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="22" font-weight="700">Production evidence becomes release policy</text>
+  <text x="64" y="78" fill="#7F8DA4" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="13">Every decision remains connected to the production behavior that motivated it.</text>
+  <g stroke="#476A9E" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <path d="M252 150H306"/><path d="M512 150H566"/><path d="M772 150H826"/>
+    <path d="M1032 150h80c38 0 48 23 48 52v28"/>
+    <path d="M1040 305H986"/><path d="M780 305H726"/><path d="M520 305H466"/>
+  </g>
+  <g font-family="system-ui,-apple-system,Segoe UI,sans-serif">
+    <g transform="translate(54 110)"><rect width="198" height="80" rx="10" fill="url(#top)" stroke="#27456F"/><circle cx="28" cy="28" r="9" fill="#35C2FF"/><text x="48" y="33" fill="#F7F9FC" font-size="15" font-weight="700">Production run</text><text x="24" y="58" fill="#8E9CB3" font-size="12">Observed agent behavior</text></g>
+    <g transform="translate(306 110)"><rect width="206" height="80" rx="10" fill="#0B1424" stroke="#27456F"/><path d="M24 22h18M24 29h18M24 36h18" stroke="#35C2FF" stroke-width="2"/><text x="54" y="33" fill="#F7F9FC" font-size="15" font-weight="700">Failure cluster</text><text x="24" y="58" fill="#8E9CB3" font-size="12">Recurring execution signature</text></g>
+    <g transform="translate(566 110)"><rect width="206" height="80" rx="10" fill="#0B1424" stroke="#27456F"/><path d="M31 19l11 20H20Z" fill="none" stroke="#F08A7D" stroke-width="2"/><text x="54" y="33" fill="#F7F9FC" font-size="15" font-weight="700">Incident</text><text x="24" y="58" fill="#8E9CB3" font-size="12">Impact and representative runs</text></g>
+    <g transform="translate(826 110)"><rect width="206" height="80" rx="10" fill="#0B1424" stroke="#27456F"/><circle cx="31" cy="29" r="11" fill="none" stroke="#73B6FF" stroke-width="2"/><path d="M39 37l8 8" stroke="#35C2FF" stroke-width="3"/><text x="56" y="33" fill="#F7F9FC" font-size="15" font-weight="700">Change evidence</text><text x="24" y="58" fill="#8E9CB3" font-size="12">Ranked, inspectable associations</text></g>
+    <g transform="translate(940 265)"><rect width="220" height="80" rx="10" fill="#0B1424" stroke="#27456F"/><path d="M24 21h20v23H24zM29 27h10M29 33h10M29 39h7" fill="none" stroke="#35C2FF" stroke-width="2"/><text x="58" y="33" fill="#F7F9FC" font-size="15" font-weight="700">Regression case</text><text x="24" y="58" fill="#8E9CB3" font-size="12">Reviewed production failure</text></g>
+    <g transform="translate(680 265)"><rect width="206" height="80" rx="10" fill="#0B1424" stroke="#27456F"/><path d="M23 35l8-16 8 16M27 30h8" fill="none" stroke="#73B6FF" stroke-width="2"/><text x="53" y="33" fill="#F7F9FC" font-size="15" font-weight="700">Candidate</text><text x="24" y="58" fill="#8E9CB3" font-size="12">Paired evaluation</text></g>
+    <g transform="translate(420 265)"><rect width="206" height="80" rx="10" fill="#112445" stroke="#247CFF"/><path d="M23 30l6 6 13-15" fill="none" stroke="#35C2FF" stroke-width="2.5"/><text x="53" y="33" fill="#F7F9FC" font-size="15" font-weight="700">Release gate</text><text x="24" y="58" fill="#A9B8CF" font-size="12">Frozen evidence decision</text></g>
+    <path d="M420 305H350" stroke="#476A9E" stroke-width="2"/>
+    <path d="M350 305v-38M350 305v38" stroke="#476A9E" stroke-width="2"/>
+    <rect x="206" y="230" width="144" height="68" rx="9" fill="#0C241E" stroke="#2B775D"/><text x="278" y="257" text-anchor="middle" fill="#7FE2BE" font-size="14" font-weight="750">PASS</text><text x="278" y="279" text-anchor="middle" fill="#A8B4C8" font-size="12">SHIP</text>
+    <rect x="206" y="312" width="144" height="68" rx="9" fill="#2B1519" stroke="#884750"/><text x="278" y="339" text-anchor="middle" fill="#F29A96" font-size="14" font-weight="750">BLOCK</text><text x="278" y="361" text-anchor="middle" fill="#A8B4C8" font-size="12">FIX</text>
+  </g>
+  <rect x="54" y="403" width="1332" height="2" fill="url(#active)" opacity=".75"/>
+</svg>

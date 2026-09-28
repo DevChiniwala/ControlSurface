@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc">
+  <title id="title">Release gating in continuous integration</title>
+  <desc id="desc">A pull request candidate runs a ControlSurface regression suite and returns a deterministic pass or block check result.</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0l10 5-10 5Z" fill="#456B9D"/></marker></defs>
+  <rect width="1200" height="280" rx="18" fill="#050912"/>
+  <g font-family="system-ui,-apple-system,Segoe UI,sans-serif">
+    <text x="54" y="49" fill="#F7F9FC" font-size="20" font-weight="700">A release gate is a build decision, not another dashboard.</text>
+    <text x="54" y="74" fill="#7F8DA4" font-size="13">The CLI returns exit 0 for pass, exit 2 for block, and records the evidence bundle through the API.</text>
+    <g transform="translate(54 116)"><rect width="190" height="104" rx="10" fill="#0B1424" stroke="#253B5A"/><path d="M22 24h24v24H22zM27 30h14M27 36h9" fill="none" stroke="#73B6FF" stroke-width="2"/><text x="58" y="37" fill="#F7F9FC" font-size="14" font-weight="700">Pull request</text><text x="22" y="77" fill="#8F9DB3" font-size="12">Candidate version</text></g>
+    <path d="M256 168H316" stroke="#456B9D" stroke-width="2" marker-end="url(#arrow)"/>
+    <g transform="translate(330 116)"><rect width="220" height="104" rx="10" fill="#0B1424" stroke="#27456F"/><path d="M21 25h20v24H21zM26 19h20v24" fill="none" stroke="#35C2FF" stroke-width="2"/><text x="57" y="37" fill="#F7F9FC" font-size="14" font-weight="700">Regression suite</text><text x="22" y="77" fill="#8F9DB3" font-size="12">Pinned revision + policy</text></g>
+    <path d="M562 168H622" stroke="#456B9D" stroke-width="2" marker-end="url(#arrow)"/>
+    <g transform="translate(636 116)"><rect width="210" height="104" rx="10" fill="#10203A" stroke="#247CFF"/><path d="M22 27l8 8 15-18" fill="none" stroke="#35C2FF" stroke-width="2.5"/><text x="58" y="37" fill="#F7F9FC" font-size="14" font-weight="700">ControlSurface gate</text><text x="22" y="77" fill="#8F9DB3" font-size="12">Content-hashed evidence</text></g>
+    <path d="M858 168H918" stroke="#456B9D" stroke-width="2" marker-end="url(#arrow)"/>
+    <g transform="translate(932 116)"><rect width="214" height="104" rx="10" fill="#0C241E" stroke="#2B775D"/><circle cx="32" cy="35" r="13" fill="#13352B"/><path d="M25 35l5 5 9-12" fill="none" stroke="#7FE2BE" stroke-width="2.5"/><text x="58" y="39" fill="#F7F9FC" font-size="14" font-weight="700">Check result</text><text x="22" y="77" fill="#8F9DB3" font-size="12">PASS or BLOCK</text></g>
+  </g>
+</svg>
