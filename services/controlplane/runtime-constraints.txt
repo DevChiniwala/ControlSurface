@@ -16,7 +16,7 @@ httptools==0.8.0
 idna==3.20
 lz4==4.4.5
 opentelemetry-proto==1.45.0
-protobuf==6.33.6
+protobuf==7.36.2
 psycopg==3.3.6
 psycopg-binary==3.3.6
 psycopg-pool==3.3.3
