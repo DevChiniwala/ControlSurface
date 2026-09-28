@@ -22,7 +22,7 @@ psycopg-binary==3.3.6
 psycopg-pool==3.3.3
 pycparser==3.0
 pydantic==2.13.5
-pydantic-core==2.46.5
+pydantic-core==2.49.0
 python-dotenv==1.2.3
 pytz==2026.4
 PyYAML==6.0.3
