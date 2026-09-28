@@ -1,0 +1,77 @@
+name: Bug report
+description: Report a reproducible ControlSurface defect.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve ControlSurface. Remove credentials, prompts, trace payloads, and other sensitive telemetry before submitting.
+  - type: input
+    id: version
+    attributes:
+      label: ControlSurface version
+      description: Tag, commit SHA, or container/source revision.
+      placeholder: v0.1.0-rc.1
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Web console
+        - Control API
+        - OTLP ingest
+        - Worker / ClickHouse projection
+        - Python SDK
+        - CLI / release gates
+        - Docker Compose / operations
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, browser or Python version, deployment method, and relevant service versions.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest deterministic sequence that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Add relevant logs, screenshots, trace IDs, or error output after removing secrets and sensitive telemetry.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I reproduced this on the latest release candidate or current main branch.
+          required: true
+        - label: I removed secrets and sensitive production telemetry.
+          required: true
+        - label: I searched existing issues for the same problem.
+          required: true

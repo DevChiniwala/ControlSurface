@@ -2,7 +2,7 @@
 
 All notable changes are recorded here. ControlSurface has not published a package or container release.
 
-## Unreleased — v0.1.0-rc.1 candidate
+## 0.1.0-rc.1 — 2026-09-28
 
 ### Added
 

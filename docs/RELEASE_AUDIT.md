@@ -1,10 +1,10 @@
 # v0.1.0-rc.1 release audit
 
-Audit date: 2026-09-27
+Audit date: 2026-09-28
 
 Scope: local source tree and locally built Linux/amd64 Compose artifacts
 
-Status: **local and GitHub Actions release-candidate checks pass; binary distribution packaging remains**
+Status: **engineering candidate checks pass; launch-only changes require exact-commit remote verification; binary distribution packaging remains**
 
 This record reports executed checks. It is not a promise that defects cannot exist, a security certification, or legal advice.
 
@@ -22,8 +22,8 @@ This record reports executed checks. It is not a promise that defects cannot exi
 | Check | Result |
 | --- | --- |
 | Ruff lint and format (server, SDK, example, tests, benchmarks, scripts) | Pass |
-| mypy (server, SDK, recovery operator) | Pass, 23 source files |
-| Backend and SDK unit tests | Pass, 57 tests |
+| mypy (server and SDK) | Pass, 22 source files |
+| Backend and SDK unit tests | Pass, 59 tests |
 | TypeScript type check | Pass |
 | ESLint | Pass |
 | Prettier | Pass |
@@ -112,10 +112,8 @@ Known limits remain: trusted-host/single-owner model, best-effort free-text reda
 
 ## Release decision
 
-The exact source candidate at `8d3f1b795f7d1aeeb1fb8fe4b1cce37897744295` passed both remote jobs in [GitHub Actions run 36322748409](https://github.com/DevChiniwala/ControlSurface/actions/runs/36322748409). It is ready for a **public source release candidate** after these product-release actions:
+The engineering candidate at `8d3f1b795f7d1aeeb1fb8fe4b1cce37897744295` passed both remote jobs in [GitHub Actions run 36322748409](https://github.com/DevChiniwala/ControlSurface/actions/runs/36322748409). A captioned 70-second real-product demo has since been recorded from the synthetic refund workflow, and the repository's launch governance and public presentation have been prepared.
 
-1. Record the planned short real-product hero demo.
-2. Change repository visibility only when Dev Chiniwala is ready for public disclosure.
-3. Tag `v0.1.0-rc.1` from the verified source candidate after the public-release decision.
+The final launch commit must pass `quality` and `hero-e2e` again before tagging. Tag `v0.1.0-rc.1` only from that exact verified commit after Dev Chiniwala approves the final launch review.
 
 Not approved by this audit: public Python package publication, public container publication, production HA claims, or hosted multi-tenant operation.

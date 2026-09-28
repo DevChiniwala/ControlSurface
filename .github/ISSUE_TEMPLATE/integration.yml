@@ -1,0 +1,44 @@
+name: Integration request
+description: Request or propose an agent framework, model, tool, or telemetry integration.
+title: "[Integration]: "
+labels:
+  - integration
+body:
+  - type: input
+    id: target
+    attributes:
+      label: Integration target
+      placeholder: Framework, provider, protocol, tool system, or runtime
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Relevant versions
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Production use case
+      description: Describe the agent workflow and why generic OpenTelemetry instrumentation is insufficient.
+    validations:
+      required: true
+  - type: textarea
+    id: telemetry
+    attributes:
+      label: Expected telemetry
+      description: Which agent, model, tool, retrieval, retry, session, token, cost, or error data should be captured?
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: Public technical references
+      description: Link official documentation or protocol specifications only.
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to help validate the integration.
+        - label: I am willing to contribute an implementation or fixtures.
+        - label: I can provide a minimal public reproduction.
