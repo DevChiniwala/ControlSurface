@@ -25,13 +25,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/DevChiniwala/ControlSurface/releases/download/v0.1.0-rc.1/controlsurface-v0.1.0-rc.1-demo.mp4">
-    <img src="docs/assets/readme/hero-demo.gif" width="100%" alt="ControlSurface real-product workflow from Production Health to a passing release gate">
+  <a href="https://github.com/DevChiniwala/ControlSurface/releases/download/v0.1.0-rc.1/controlsurface-v0.1.0-rc.1-demo-v2.mp4">
+    <img src="docs/assets/readme/hero-demo.gif" width="100%" alt="15-second ControlSurface preview: Production Health, failure clustering, incident evidence, and a passing release gate">
   </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/DevChiniwala/ControlSurface/releases/download/v0.1.0-rc.1/controlsurface-v0.1.0-rc.1-demo.mp4"><strong>Watch the complete 70-second failure-to-release workflow</strong></a>
+  <a href="https://github.com/DevChiniwala/ControlSurface/releases/download/v0.1.0-rc.1/controlsurface-v0.1.0-rc.1-demo-v2.mp4"><strong>Watch the complete 72-second failure-to-release workflow</strong></a>
 </p>
 
 ## Production failures should make your system smarter.
